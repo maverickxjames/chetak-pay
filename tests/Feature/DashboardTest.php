@@ -1,0 +1,221 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\User;
+use App\Models\Reward;
+use App\Models\Notification;
+use App\Models\UserReward;
+use App\Models\Transaction;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
+
+class DashboardTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private User $user;
+    private Reward $newbieReward;
+    private Reward $dailyReward;
+    private Reward $teamReward;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // Create standard test user
+        $this->user = User::create([
+            'mobile' => '9876543210',
+            'name' => 'John Doe',
+            'email' => 'john@example.com',
+            'referral_code' => 'CPABC123',
+            'wallet_balance' => 0.00,
+            'total_investment' => 0.00,
+            'total_commission' => 0.00,
+            'total_withdrawn' => 0.00,
+        ]);
+
+        // Create test rewards
+        $this->newbieReward = Reward::create([
+            'title' => 'Welcome Bonus',
+            'description' => 'Verify phone number.',
+            'amount' => 50.00,
+            'category' => 'newbie',
+            'required_milestone' => 0
+        ]);
+
+        $this->dailyReward = Reward::create([
+            'title' => 'Daily Attendance',
+            'description' => 'Daily check-in.',
+            'amount' => 5.00,
+            'category' => 'daily',
+            'required_milestone' => 0
+        ]);
+
+        $this->teamReward = Reward::create([
+            'title' => 'Milestone Recruiter',
+            'description' => 'Recruit 3 members.',
+            'amount' => 100.00,
+            'category' => 'team',
+            'required_milestone' => 3
+        ]);
+    }
+
+    /**
+     * Test GET /api/v1/rewards.
+     */
+    public function test_rewards_endpoint_returns_status(): void
+    {
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->getJson('/api/v1/rewards');
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+                'message' => 'Rewards retrieved successfully.'
+            ]);
+
+        // Newbie should be claimable, team reward should be locked (0 referrals < 3 required)
+        $rewardsData = $response->json('data');
+        $this->assertEquals('CLAIMABLE', $rewardsData[0]['status']); // newbie
+        $this->assertEquals('CLAIMABLE', $rewardsData[1]['status']); // daily
+        $this->assertEquals('LOCKED', $rewardsData[2]['status']); // team
+    }
+
+    /**
+     * Test POST /api/v1/rewards/{id}/claim.
+     */
+    public function test_rewards_claim_newbie_success(): void
+    {
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->postJson("/api/v1/rewards/{$this->newbieReward->id}/claim");
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+                'message' => 'Reward claimed successfully.',
+                'data' => [
+                    'wallet_balance' => '50.00'
+                ]
+            ]);
+
+        // Verify balance updated, transaction and user_rewards created
+        $this->assertDatabaseHas('users', [
+            'id' => $this->user->id,
+            'wallet_balance' => 50.00,
+            'total_commission' => 50.00
+        ]);
+
+        $this->assertDatabaseHas('user_rewards', [
+            'user_id' => $this->user->id,
+            'reward_id' => $this->newbieReward->id
+        ]);
+
+        $this->assertDatabaseHas('transactions', [
+            'user_id' => $this->user->id,
+            'type' => 'incentive',
+            'amount' => 50.00
+        ]);
+    }
+
+    /**
+     * Test claiming same reward twice.
+     */
+    public function test_cannot_claim_same_reward_twice(): void
+    {
+        // Pre-claim the reward
+        UserReward::create([
+            'user_id' => $this->user->id,
+            'reward_id' => $this->newbieReward->id,
+            'claimed_at' => now()
+        ]);
+
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->postJson("/api/v1/rewards/{$this->newbieReward->id}/claim");
+
+        $response->assertStatus(422)
+            ->assertJson([
+                'success' => false,
+                'message' => 'Reward already claimed.'
+            ]);
+    }
+
+    /**
+     * Test GET /api/v1/team.
+     */
+    public function test_team_endpoint_returns_stats(): void
+    {
+        // Refer 3 users
+        for ($i = 1; $i <= 3; $i++) {
+            User::create([
+                'mobile' => "987654321$i",
+                'name' => "Member $i",
+                'referred_by' => $this->user->id,
+                'total_investment' => 1000.00
+            ]);
+        }
+
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->getJson('/api/v1/team');
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+                'data' => [
+                    'team_members_count' => 3,
+                    'team_investment' => '3000.00',
+                    'referral_code' => $this->user->referral_code
+                ]
+            ]);
+
+        $this->assertCount(3, $response->json('data.members'));
+    }
+
+    /**
+     * Test GET /api/v1/wallet.
+     */
+    public function test_wallet_endpoint_returns_transactions(): void
+    {
+        // Add dummy transactions
+        Transaction::create([
+            'user_id' => $this->user->id,
+            'type' => 'commission_credit',
+            'amount' => 150.00,
+            'description' => 'Referral bonus'
+        ]);
+
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->getJson('/api/v1/wallet');
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+                'data' => [
+                    'wallet_balance' => '0.00'
+                ]
+            ]);
+
+        $this->assertCount(1, $response->json('data.transactions'));
+    }
+
+    /**
+     * Test GET /api/v1/notifications.
+     */
+    public function test_notifications_endpoint(): void
+    {
+        Notification::create([
+            'title' => 'Important Update',
+            'content' => 'System maintenance.'
+        ]);
+
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->getJson('/api/v1/notifications');
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'success' => true
+            ]);
+
+        $this->assertCount(1, $response->json('data'));
+    }
+}

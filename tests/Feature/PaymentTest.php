@@ -17,6 +17,8 @@ class PaymentTest extends TestCase
     {
         parent::setUp();
 
+        \App\Models\Setting::setValue('commission_percentage', '3.0');
+
         // Seed master plans
         Plan::create(['name' => 'Starter I', 'amount' => 1000.00, 'daily_commission' => 50.00, 'duration_days' => 30, 'category' => 'Starter', 'status' => 'active']);
         Plan::create(['name' => 'Silver Plus', 'amount' => 5000.00, 'daily_commission' => 280.00, 'duration_days' => 45, 'category' => 'Silver', 'status' => 'active']);

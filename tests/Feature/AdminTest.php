@@ -21,6 +21,7 @@ class AdminTest extends TestCase
         parent::setUp();
         // Disable CSRF for admin web tests
         $this->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class);
+        Setting::setValue('commission_percentage', '3.0');
     }
 
     /**
@@ -279,7 +280,8 @@ class AdminTest extends TestCase
             'upi_name' => 'Chetak Merchants',
             'website_name' => 'Chetak Pay',
             'support_contact' => 'support@chetakpay.com',
-            'app_version' => '1.0.0'
+            'app_version' => '1.0.0',
+            'commission_percentage' => '3.0'
         ]);
 
         $response->assertRedirect();
@@ -360,7 +362,8 @@ class AdminTest extends TestCase
             'support_contact' => 'help@brandnew.com',
             'app_version' => '1.2.0',
             'maintenance_mode' => '1',
-            'feature_referrals' => '1'
+            'feature_referrals' => '1',
+            'commission_percentage' => '3.0'
         ]);
 
         $response->assertRedirect();

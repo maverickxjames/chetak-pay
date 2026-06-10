@@ -115,7 +115,7 @@
                 </div>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div>
                     <label for="support_contact" class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Support Contact (Email/URL)</label>
                     <input type="text" name="support_contact" id="support_contact" required value="{{ $settings['support_contact'] }}"
@@ -124,6 +124,11 @@
                 <div>
                     <label for="otp_api_key" class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">OTP SMS Gateway API Key</label>
                     <input type="text" name="otp_api_key" id="otp_api_key" value="{{ $settings['otp_api_key'] }}" placeholder="SMS provider key"
+                           class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#FFC107] focus:ring-1 focus:ring-[#FFC107] transition-all">
+                </div>
+                <div>
+                    <label for="commission_percentage" class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Master Commission Rate (%)</label>
+                    <input type="number" step="0.1" min="0" max="100" name="commission_percentage" id="commission_percentage" required value="{{ $settings['commission_percentage'] }}" placeholder="3.8"
                            class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#FFC107] focus:ring-1 focus:ring-[#FFC107] transition-all">
                 </div>
             </div>

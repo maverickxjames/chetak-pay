@@ -139,8 +139,8 @@ class OrderController extends Controller
 
         DB::beginTransaction();
         try {
-            // Calculate instant commission for the user (default 3%)
-            $commissionRate = env('MASTER_COMMISSION_RATE', 3.0);
+            // Calculate instant commission for the user (loaded from dynamic database settings)
+            $commissionRate = (double) \App\Models\Setting::getValue('commission_percentage', '3.8');
             $userCommission = $order->amount * ($commissionRate / 100);
 
             // Update order details

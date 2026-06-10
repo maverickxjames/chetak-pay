@@ -29,6 +29,7 @@ class ConfigController extends Controller
                 'privacy_policy' => Setting::getValue('privacy_policy', ''),
                 'about_us' => Setting::getValue('about_us', ''),
                 'terms_conditions' => Setting::getValue('terms_conditions', ''),
+                'commission_percentage' => (double) Setting::getValue('commission_percentage', '3.8'),
             ]
         ]);
     }

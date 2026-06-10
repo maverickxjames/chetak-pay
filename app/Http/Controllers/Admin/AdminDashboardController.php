@@ -229,7 +229,7 @@ class AdminDashboardController extends Controller
 
         DB::beginTransaction();
         try {
-            $commissionRate = env('MASTER_COMMISSION_RATE', 3.0);
+            $commissionRate = (double) Setting::getValue('commission_percentage', '3.8');
             $userCommission = $order->amount * ($commissionRate / 100);
 
             // Activate order
@@ -416,6 +416,7 @@ class AdminDashboardController extends Controller
             'privacy_policy' => Setting::getValue('privacy_policy', ''),
             'about_us' => Setting::getValue('about_us', ''),
             'terms_conditions' => Setting::getValue('terms_conditions', ''),
+            'commission_percentage' => Setting::getValue('commission_percentage', '3.8'),
         ];
 
         return view('admin.settings', compact('settings'));
@@ -446,6 +447,7 @@ class AdminDashboardController extends Controller
             'privacy_policy' => 'nullable|string',
             'about_us' => 'nullable|string',
             'terms_conditions' => 'nullable|string',
+            'commission_percentage' => 'required|numeric|min:0|max:100',
         ]);
 
         $keys = [
@@ -466,6 +468,7 @@ class AdminDashboardController extends Controller
             'privacy_policy',
             'about_us',
             'terms_conditions',
+            'commission_percentage',
         ];
 
         foreach ($keys as $key) {

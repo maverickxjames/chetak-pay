@@ -16,8 +16,8 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         // Seed Master Investment Plans
-        \App\Models\Plan::create(['name' => 'Starter Tier I', 'amount' => 1000.00, 'daily_commission' => 50.00, 'duration_days' => 30, 'category' => 'Starter', 'status' => 'active']);
-        \App\Models\Plan::create(['name' => 'Starter Tier II', 'amount' => 2500.00, 'daily_commission' => 130.00, 'duration_days' => 30, 'category' => 'Starter', 'status' => 'active']);
+        \App\Models\Plan::create(['name' => 'Starter I', 'amount' => 1000.00, 'daily_commission' => 50.00, 'duration_days' => 30, 'category' => 'Starter', 'status' => 'active']);
+        \App\Models\Plan::create(['name' => 'Starter II', 'amount' => 2500.00, 'daily_commission' => 130.00, 'duration_days' => 30, 'category' => 'Starter', 'status' => 'active']);
         \App\Models\Plan::create(['name' => 'Silver Plus', 'amount' => 5000.00, 'daily_commission' => 280.00, 'duration_days' => 45, 'category' => 'Silver', 'status' => 'active']);
         \App\Models\Plan::create(['name' => 'Silver Premium', 'amount' => 10000.00, 'daily_commission' => 600.00, 'duration_days' => 45, 'category' => 'Silver', 'status' => 'active']);
         \App\Models\Plan::create(['name' => 'Gold Standard', 'amount' => 25000.00, 'daily_commission' => 1600.00, 'duration_days' => 60, 'category' => 'Gold', 'status' => 'active']);
@@ -72,7 +72,7 @@ class DatabaseSeeder extends Seeder
 
         \App\Models\Notification::create([
             'title' => 'VIP plans unlocked',
-            'content' => 'High tier VIP investment plans are now available for all registered members.'
+            'content' => 'High-level VIP investment plans are now available for all registered members.'
         ]);
 
         // Create admin user

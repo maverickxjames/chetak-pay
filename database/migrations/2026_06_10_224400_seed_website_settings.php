@@ -12,9 +12,9 @@ return new class extends Migration
     {
         $defaults = [
             'website_name' => 'Chetak Pay',
-            'website_logo' => 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=200&h=200&q=80',
+            'website_logo' => 'https://pub-9ca94f15ac314332b24f684aabbcd27a.r2.dev/Chetak.png',
             'support_contact' => 'support@chetakpay.com',
-            'otp_api_key' => 'DEFAULT_OTP_API_KEY',
+            'otp_api_key' => 'ZakGjMyszUGNOucV4rmzOJtR7AdkVTXiBwFQTR2HZtPtSAroZ6MQiqKBCgmx',
             'feature_referrals' => '1',
             'feature_rewards' => '1',
             'app_version' => '1.0.0',

@@ -34,8 +34,6 @@
                         class="w-full bg-[#1C002C] border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#FFC107] focus:ring-1 focus:ring-[#FFC107] transition-all">
                     <option value="manual_qr" {{ $settings['active_gateway'] === 'manual_qr' ? 'selected' : '' }}>Manual QR Code (UTR Verification)</option>
                     <option value="upi_qr" {{ $settings['active_gateway'] === 'upi_qr' ? 'selected' : '' }}>UPI QR Intent / Direct Payout</option>
-                    <option value="razorpay" {{ $settings['active_gateway'] === 'razorpay' ? 'selected' : '' }}>Razorpay Gateway Integration</option>
-                    <option value="cashfree" {{ $settings['active_gateway'] === 'cashfree' ? 'selected' : '' }}>Cashfree Gateway Integration</option>
                 </select>
                 <p class="text-xs text-gray-500 mt-2">Specify which checkout flow is exposed to the Android mobile app.</p>
             </div>
@@ -45,7 +43,7 @@
             <!-- UPI ID & Name -->
             <div class="space-y-4">
                 <h4 class="text-sm font-bold text-[#FFC107]">UPI / QR Payout Credentials</h4>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                         <label for="upi_id" class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Merchant UPI ID</label>
                         <input type="text" name="upi_id" id="upi_id" value="{{ $settings['upi_id'] }}" placeholder="merchant@okaxis"
@@ -56,46 +54,14 @@
                         <input type="text" name="upi_name" id="upi_name" value="{{ $settings['upi_name'] }}" placeholder="Chetak Pay Admin"
                                class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#FFC107] focus:ring-1 focus:ring-[#FFC107] transition-all">
                     </div>
-                </div>
-            </div>
-
-            <hr class="border-white/10">
-
-            <!-- Razorpay -->
-            <div class="space-y-4">
-                <h4 class="text-sm font-bold text-[#C2185B]">Razorpay Credentials</h4>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label for="razorpay_key_id" class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Razorpay Key ID</label>
-                        <input type="text" name="razorpay_key_id" id="razorpay_key_id" value="{{ $settings['razorpay_key_id'] }}" placeholder="rzp_test_..."
-                               class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#FFC107] focus:ring-1 focus:ring-[#FFC107] transition-all">
-                    </div>
-                    <div>
-                        <label for="razorpay_key_secret" class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Razorpay Key Secret</label>
-                        <input type="password" name="razorpay_key_secret" id="razorpay_key_secret" value="{{ $settings['razorpay_key_secret'] }}" placeholder="••••••••"
+                        <label for="paytm_mid" class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Paytm Merchant ID (MID)</label>
+                        <input type="text" name="paytm_mid" id="paytm_mid" value="{{ $settings['paytm_mid'] }}" placeholder="MID_DEFAULT_TEST_123"
                                class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#FFC107] focus:ring-1 focus:ring-[#FFC107] transition-all">
                     </div>
                 </div>
             </div>
 
-            <hr class="border-white/10">
-
-            <!-- Cashfree -->
-            <div class="space-y-4">
-                <h4 class="text-sm font-bold text-blue-400">Cashfree Credentials</h4>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label for="cashfree_app_id" class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Cashfree App ID</label>
-                        <input type="text" name="cashfree_app_id" id="cashfree_app_id" value="{{ $settings['cashfree_app_id'] }}" placeholder="cf_app_..."
-                               class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#FFC107] focus:ring-1 focus:ring-[#FFC107] transition-all">
-                    </div>
-                    <div>
-                        <label for="cashfree_secret_key" class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Cashfree Secret Key</label>
-                        <input type="password" name="cashfree_secret_key" id="cashfree_secret_key" value="{{ $settings['cashfree_secret_key'] }}" placeholder="••••••••"
-                               class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#FFC107] focus:ring-1 focus:ring-[#FFC107] transition-all">
-                    </div>
-                </div>
-            </div>
         </div>
 
         <!-- Tab 2: Website & General Config -->
@@ -115,21 +81,120 @@
                 </div>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                     <label for="support_contact" class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Support Contact (Email/URL)</label>
                     <input type="text" name="support_contact" id="support_contact" required value="{{ $settings['support_contact'] }}"
                            class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#FFC107] focus:ring-1 focus:ring-[#FFC107] transition-all">
                 </div>
                 <div>
-                    <label for="otp_api_key" class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">OTP SMS Gateway API Key</label>
-                    <input type="text" name="otp_api_key" id="otp_api_key" value="{{ $settings['otp_api_key'] }}" placeholder="SMS provider key"
-                           class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#FFC107] focus:ring-1 focus:ring-[#FFC107] transition-all">
-                </div>
-                <div>
                     <label for="commission_percentage" class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Master Commission Rate (%)</label>
                     <input type="number" step="0.1" min="0" max="100" name="commission_percentage" id="commission_percentage" required value="{{ $settings['commission_percentage'] }}" placeholder="3.8"
                            class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#FFC107] focus:ring-1 focus:ring-[#FFC107] transition-all">
+                </div>
+            </div>
+
+            <hr class="border-white/10">
+
+            <!-- Bonus & Referral Settings -->
+            <div class="space-y-4">
+                <h4 class="text-sm font-bold text-[#FFC107]">Bonus & Referral Settings</h4>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div>
+                        <label for="welcome_bonus_amount" class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Welcome Bonus Amount (₹)</label>
+                        <input type="number" step="0.01" min="0" name="welcome_bonus_amount" id="welcome_bonus_amount" required value="{{ $settings['welcome_bonus_amount'] }}" placeholder="50.00"
+                               class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#FFC107] focus:ring-1 focus:ring-[#FFC107] transition-all">
+                    </div>
+                    <div>
+                        <label for="daily_attendance_bonus_amount" class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Daily Attendance Bonus (₹)</label>
+                        <input type="number" step="0.01" min="0" name="daily_attendance_bonus_amount" id="daily_attendance_bonus_amount" required value="{{ $settings['daily_attendance_bonus_amount'] }}" placeholder="5.00"
+                               class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#FFC107] focus:ring-1 focus:ring-[#FFC107] transition-all">
+                    </div>
+                    <div>
+                        <label for="referral_commission_percentage" class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Team Direct Referral Income (%)</label>
+                        <input type="number" step="0.1" min="0" max="100" name="referral_commission_percentage" id="referral_commission_percentage" required value="{{ $settings['referral_commission_percentage'] }}" placeholder="10.0"
+                               class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#FFC107] focus:ring-1 focus:ring-[#FFC107] transition-all">
+                    </div>
+                </div>
+            </div>
+
+            <hr class="border-white/10">
+
+            <!-- OTP SMS Gateway Configurations -->
+            <div class="space-y-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h4 class="text-sm font-bold text-[#FFC107]">OTP SMS Gateway Settings</h4>
+                        <p class="text-xs text-gray-500">Configure parameters for bulk SMS API to dispatch login/signup OTP codes.</p>
+                    </div>
+                    <div>
+                        <label for="otp_provider" class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1">Active Provider</label>
+                        <select name="otp_provider" id="otp_provider" class="bg-[#1E002C] border border-white/10 rounded-xl px-4 py-2 text-white text-sm focus:outline-none focus:border-[#FFC107] focus:ring-1 focus:ring-[#FFC107]">
+                            <option value="fast2sms" {{ $settings['otp_provider'] === 'fast2sms' ? 'selected' : '' }}>Fast2SMS</option>
+                            <option value="otpwala" {{ $settings['otp_provider'] === 'otpwala' ? 'selected' : '' }}>OTPWala</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Provider-specific sections -->
+                <div class="border border-white/5 bg-white/5 p-5 rounded-2xl space-y-4">
+                    <div class="border-b border-white/5 pb-2">
+                        <span class="text-xs font-bold text-[#C2185B] uppercase tracking-wider">Fast2SMS Configuration Settings</span>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label for="fast2sms_api_url" class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Fast2SMS API URL</label>
+                            <input type="url" name="fast2sms_api_url" id="fast2sms_api_url" required value="{{ $settings['fast2sms_api_url'] }}" placeholder="https://www.fast2sms.com/dev/bulkV2"
+                                   class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#FFC107] focus:ring-1 focus:ring-[#FFC107] transition-all">
+                        </div>
+                        <div>
+                            <label for="fast2sms_api_key" class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Fast2SMS Authorization Key</label>
+                            <input type="text" name="fast2sms_api_key" id="fast2sms_api_key" value="{{ $settings['fast2sms_api_key'] }}" placeholder="Fast2SMS authorization token"
+                                   class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#FFC107] focus:ring-1 focus:ring-[#FFC107] transition-all">
+                        </div>
+                    </div>
+                    <div>
+                        <label for="fast2sms_template_id" class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Fast2SMS DLT Template ID</label>
+                        <input type="text" name="fast2sms_template_id" id="fast2sms_template_id" value="{{ $settings['fast2sms_template_id'] }}" placeholder="194943"
+                               class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#FFC107] focus:ring-1 focus:ring-[#FFC107] transition-all">
+                    </div>
+                </div>
+
+                <div class="border border-white/5 bg-white/5 p-5 rounded-2xl space-y-4">
+                    <div class="border-b border-white/5 pb-2">
+                        <span class="text-xs font-bold text-[#C2185B] uppercase tracking-wider">OTPWala Configuration Settings</span>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label for="otpwala_api_url" class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">OTPWala API URL</label>
+                            <input type="url" name="otpwala_api_url" id="otpwala_api_url" required value="{{ $settings['otpwala_api_url'] }}" placeholder="https://sms.otpwala.com/dev/bulkV2"
+                                   class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#FFC107] focus:ring-1 focus:ring-[#FFC107] transition-all">
+                        </div>
+                        <div>
+                            <label for="otpwala_api_key" class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">OTPWala Authorization Key</label>
+                            <input type="text" name="otpwala_api_key" id="otpwala_api_key" value="{{ $settings['otpwala_api_key'] }}" placeholder="OTPWala authorization token"
+                                   class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#FFC107] focus:ring-1 focus:ring-[#FFC107] transition-all">
+                        </div>
+                    </div>
+                    <div>
+                        <label for="otpwala_template_id" class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">OTPWala DLT Template ID</label>
+                        <input type="text" name="otpwala_template_id" id="otpwala_template_id" value="{{ $settings['otpwala_template_id'] }}" placeholder="12294"
+                               class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#FFC107] focus:ring-1 focus:ring-[#FFC107] transition-all">
+                    </div>
+                </div>
+
+                <!-- Shared parameters -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label for="otp_route" class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Shared SMS Route (DLT)</label>
+                        <input type="text" name="otp_route" id="otp_route" required value="{{ $settings['otp_route'] }}" placeholder="dlt"
+                               class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#FFC107] focus:ring-1 focus:ring-[#FFC107] transition-all">
+                    </div>
+                    <div>
+                        <label for="otp_sender_id" class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Shared Sender ID</label>
+                        <input type="text" name="otp_sender_id" id="otp_sender_id" required value="{{ $settings['otp_sender_id'] }}" placeholder="FOTPSM"
+                               class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#FFC107] focus:ring-1 focus:ring-[#FFC107] transition-all">
+                    </div>
                 </div>
             </div>
 

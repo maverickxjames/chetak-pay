@@ -11,6 +11,7 @@ class Otp extends Model
         'otp',
         'expires_at',
         'verified',
+        'payload',
     ];
 
     protected $casts = [

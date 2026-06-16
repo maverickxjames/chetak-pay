@@ -12,7 +12,7 @@
             <!-- Plan Name -->
             <div>
                 <label for="name" class="block text-xs font-semibold uppercase text-gray-400 mb-2">Plan Name</label>
-                <input type="text" name="name" id="name" required placeholder="e.g. Starter Tier III"
+                <input type="text" name="name" id="name" required placeholder="e.g. Starter III"
                        class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#FFC107] focus:ring-1 focus:ring-[#FFC107] transition-all">
             </div>
 

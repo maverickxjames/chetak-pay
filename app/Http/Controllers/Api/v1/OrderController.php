@@ -50,7 +50,7 @@ class OrderController extends Controller
     {
         $request->validate([
             'plan_id' => 'required|exists:plans,id',
-            'payment_method' => 'required|in:razorpay,cashfree,upi_qr,manual_qr',
+            'payment_method' => 'required|in:upi_qr,manual_qr',
         ]);
 
         $user = $request->user();
@@ -66,6 +66,8 @@ class OrderController extends Controller
 
         // Generate unique order ID
         $orderId = 'ORD' . time() . str_pad($user->id, 4, '0', STR_PAD_LEFT);
+        $upiId = \App\Models\Setting::getValue('upi_id', 'chetakpay@okaxis');
+        $byteTxId = 'TXN' . time() . rand(1000, 9999);
 
         $order = Order::create([
             'id' => $orderId,
@@ -75,27 +77,34 @@ class OrderController extends Controller
             'status' => 'pending',
             'payment_method' => $request->payment_method,
             'commission_earned' => 0.00,
+            'upi' => $upiId,
+            'byteTransactionId' => $byteTxId,
         ]);
 
-        // Mock payment details for gateway initialization
         $paymentData = [
             'order_id' => $orderId,
             'amount' => $plan->amount,
             'currency' => 'INR',
         ];
 
-        if ($request->payment_method === 'razorpay') {
-            $paymentData['razorpay_key_id'] = \App\Models\Setting::getValue('razorpay_key_id', 'rzp_test_key');
-            $paymentData['razorpay_order_id'] = 'order_' . substr(md5($orderId), 0, 14);
-        } elseif ($request->payment_method === 'cashfree') {
-            $paymentData['cashfree_app_id'] = \App\Models\Setting::getValue('cashfree_app_id', 'cf_test_appid');
-            $paymentData['payment_session_id'] = 'session_' . substr(md5($orderId), 0, 20);
-        } elseif ($request->payment_method === 'upi_qr' || $request->payment_method === 'manual_qr') {
-            $upiId = \App\Models\Setting::getValue('upi_id', 'chetakpay@okaxis');
+        if ($request->payment_method === 'upi_qr') {
+            $paytm = "paytmmp://cash_wallet?pa={$upiId}&am={$plan->amount}&tn=Payment%20for%20Order%20{$orderId}&tid={$byteTxId}&tr={$byteTxId}&cu=INR&mc=4722&featuretype=money_transfer";
+            $gpay = "share://";
+            $cred = "credpay://upi/pay?pa={$upiId}&am={$plan->amount}&tn=Payment%20for%20Order%20{$orderId}&tid={$byteTxId}&tr={$byteTxId}&cu=INR&mc=4722&featuretype=money_transfer";
+            $upiString = "upi://pay?pa={$upiId}&pn=Merchant&am={$plan->amount}&cu=INR&tn=Payment%20for%20Order%20{$orderId}&tid={$byteTxId}&tr={$byteTxId}&mc=0000&mode=22";
+            $qrUrl = "https://api.qrserver.com/v1/create-qr-code/?data=" . urlencode($upiString) . "&size=200x200";
+
+            $paymentData['paytm'] = $paytm;
+            $paymentData['gpay'] = $gpay;
+            $paymentData['cred'] = $cred;
+            $paymentData['upi'] = $upiString;
+            $paymentData['qr'] = $qrUrl;
+            $paymentData['byteTransactionId'] = $byteTxId;
+        } elseif ($request->payment_method === 'manual_qr') {
             $name = \App\Models\Setting::getValue('upi_name', 'Chetak Pay Admin');
-            $paymentData['upi_string'] = "upi://pay?pa={$upiId}&pn=" . urlencode($name) . "&am={$plan->amount}&tr={$orderId}&cu=INR";
             $paymentData['upi_id'] = $upiId;
             $paymentData['upi_name'] = $name;
+            $paymentData['remark'] = $orderId;
         }
 
         return response()->json([
@@ -114,7 +123,7 @@ class OrderController extends Controller
     public function verifyPayment(Request $request, $id)
     {
         $request->validate([
-            'payment_txid' => 'nullable|string', // Gateway signature or UTR reference
+            'payment_txid' => 'nullable|string', // UTR reference for manual_qr, null for upi_qr
         ]);
 
         $order = Order::where('id', $id)
@@ -137,6 +146,97 @@ class OrderController extends Controller
             ], 422);
         }
 
+        // 1. Handle UPI QR Paytm API Status check
+        $bankTxId = null;
+        if ($order->payment_method === 'upi_qr') {
+            $fetchMid = \Illuminate\Support\Facades\DB::table('paytm_tokens')->first();
+            if (!$fetchMid) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Paytm MID token is not configured on the server.',
+                    'data' => null
+                ], 422);
+            }
+            $mid = $fetchMid->mid;
+            $byteTransactionId = $order->byteTransactionId;
+            $amount = (float) $order->amount;
+
+            $jsonData = json_encode([
+                "MID" => $mid,
+                "ORDERID" => $byteTransactionId,
+            ]);
+
+            try {
+                $response = \Illuminate\Support\Facades\Http::post("https://securegw.paytm.in/order/status?JsonData=" . urlencode($jsonData));
+
+                if (!$response->ok()) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Failed to reach Paytm server. Please try verification again shortly.',
+                        'data' => null
+                    ], 422);
+                }
+
+                $data = $response->json();
+
+                if (isset($data['STATUS'])) {
+                    if ($data['STATUS'] === 'TXN_SUCCESS' && floatval($data['TXNAMOUNT']) === $amount) {
+                        $bankTxId = $data['BANKTXNID'] ?? 'PTM' . time();
+                    } else {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'Payment status is still pending or failed. Status: ' . ($data['STATUS'] ?? 'PENDING'),
+                            'data' => $data
+                        ], 422);
+                    }
+                } else {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'No transaction status details returned from Paytm.',
+                        'data' => $data
+                    ], 422);
+                }
+            } catch (\Exception $e) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Paytm status query failed: ' . $e->getMessage(),
+                    'data' => null
+                ], 422);
+            }
+        }
+
+        // 2. Handle Manual QR UTR submission (awaits admin approval)
+        if ($order->payment_method === 'manual_qr') {
+            if (empty($request->payment_txid) || strlen($request->payment_txid) !== 12) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'A valid 12-digit transaction UTR is required for manual checkout.',
+                    'data' => null
+                ], 422);
+            }
+
+            DB::beginTransaction();
+            try {
+                $order->payment_txid = $request->payment_txid;
+                $order->save();
+                DB::commit();
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Your UTR reference has been submitted. Admin will review and activate your plan.',
+                    'data' => $order->load('plan')
+                ]);
+            } catch (\Exception $e) {
+                DB::rollBack();
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to save UTR code: ' . $e->getMessage(),
+                    'data' => null
+                ], 500);
+            }
+        }
+
+        // 3. For auto-approving gateway (upi_qr), proceed to database transaction to activate
         DB::beginTransaction();
         try {
             // Calculate instant commission for the user (loaded from dynamic database settings)
@@ -145,7 +245,7 @@ class OrderController extends Controller
 
             // Update order details
             $order->status = 'active';
-            $order->payment_txid = $request->payment_txid ?? 'TXN' . time();
+            $order->payment_txid = $bankTxId;
             $order->commission_earned = $userCommission;
             $order->completed_at = now();
             $order->save();
@@ -179,7 +279,8 @@ class OrderController extends Controller
             if ($user->referred_by) {
                 $referrer = User::find($user->referred_by);
                 if ($referrer) {
-                    $commission = $order->amount * 0.10;
+                    $refPercent = (double) \App\Models\Setting::getValue('referral_commission_percentage', '10.0');
+                    $commission = $order->amount * ($refPercent / 100.0);
                     $referrer->wallet_balance = ($referrer->wallet_balance ?? 0.00) + $commission;
                     $referrer->total_commission = ($referrer->total_commission ?? 0.00) + $commission;
                     $referrer->save();

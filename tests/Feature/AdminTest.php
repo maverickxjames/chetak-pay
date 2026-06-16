@@ -273,23 +273,27 @@ class AdminTest extends TestCase
         Setting::setValue('active_gateway', 'manual_qr');
 
         $response = $this->actingAs($admin)->post('/admin/settings', [
-            'active_gateway' => 'razorpay',
-            'razorpay_key_id' => 'new_rzp_key',
-            'razorpay_key_secret' => 'new_rzp_secret',
+            'active_gateway' => 'upi_qr',
             'upi_id' => 'new_upi@okaxis',
             'upi_name' => 'Chetak Merchants',
             'website_name' => 'Chetak Pay',
             'support_contact' => 'support@chetakpay.com',
+            'otp_provider' => 'fast2sms',
             'app_version' => '1.0.0',
-            'commission_percentage' => '3.0'
+            'commission_percentage' => '3.0',
+            'welcome_bonus_amount' => '50.00',
+            'daily_attendance_bonus_amount' => '5.00',
+            'referral_commission_percentage' => '10.0',
         ]);
 
         $response->assertRedirect();
         $response->assertSessionHas('success');
 
-        $this->assertEquals('razorpay', Setting::getValue('active_gateway'));
-        $this->assertEquals('new_rzp_key', Setting::getValue('razorpay_key_id'));
+        $this->assertEquals('upi_qr', Setting::getValue('active_gateway'));
         $this->assertEquals('new_upi@okaxis', Setting::getValue('upi_id'));
+        $this->assertEquals('50.00', Setting::getValue('welcome_bonus_amount'));
+        $this->assertEquals('5.00', Setting::getValue('daily_attendance_bonus_amount'));
+        $this->assertEquals('10.0', Setting::getValue('referral_commission_percentage'));
 
         // Verify admin log created
         $this->assertDatabaseHas('admin_logs', [
@@ -360,10 +364,14 @@ class AdminTest extends TestCase
             'website_name' => 'Brand New Pay',
             'website_logo' => 'https://brandnew.com/logo.png',
             'support_contact' => 'help@brandnew.com',
+            'otp_provider' => 'fast2sms',
             'app_version' => '1.2.0',
             'maintenance_mode' => '1',
             'feature_referrals' => '1',
-            'commission_percentage' => '3.0'
+            'commission_percentage' => '3.0',
+            'welcome_bonus_amount' => '100.00',
+            'daily_attendance_bonus_amount' => '10.00',
+            'referral_commission_percentage' => '15.0',
         ]);
 
         $response->assertRedirect();
@@ -373,5 +381,8 @@ class AdminTest extends TestCase
         $this->assertEquals('https://brandnew.com/logo.png', Setting::getValue('website_logo'));
         $this->assertEquals('1.2.0', Setting::getValue('app_version'));
         $this->assertEquals('1', Setting::getValue('maintenance_mode'));
+        $this->assertEquals('100.00', Setting::getValue('welcome_bonus_amount'));
+        $this->assertEquals('10.00', Setting::getValue('daily_attendance_bonus_amount'));
+        $this->assertEquals('15.0', Setting::getValue('referral_commission_percentage'));
     }
 }

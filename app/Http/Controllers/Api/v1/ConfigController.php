@@ -30,6 +30,7 @@ class ConfigController extends Controller
                 'about_us' => Setting::getValue('about_us', ''),
                 'terms_conditions' => Setting::getValue('terms_conditions', ''),
                 'commission_percentage' => (double) Setting::getValue('commission_percentage', '3.8'),
+                'default_gateway' => Setting::getValue('active_gateway', 'upi_qr'),
             ]
         ]);
     }

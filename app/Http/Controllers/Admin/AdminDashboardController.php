@@ -267,7 +267,8 @@ class AdminDashboardController extends Controller
             if ($user->referred_by) {
                 $referrer = User::find($user->referred_by);
                 if ($referrer) {
-                    $refCommission = $order->amount * 0.10;
+                    $refPercent = (double) Setting::getValue('referral_commission_percentage', '10.0');
+                    $refCommission = $order->amount * ($refPercent / 100.0);
                     $referrer->wallet_balance += $refCommission;
                     $referrer->total_commission += $refCommission;
                     $referrer->save();
@@ -392,12 +393,12 @@ class AdminDashboardController extends Controller
      */
     public function settings()
     {
+        $adminId = auth()->id() ?: 1;
+        $paytmToken = \Illuminate\Support\Facades\DB::table('paytm_tokens')->where('user_id', $adminId)->first();
+
         $settings = [
             'active_gateway' => Setting::getValue('active_gateway', 'manual_qr'),
-            'razorpay_key_id' => Setting::getValue('razorpay_key_id', ''),
-            'razorpay_key_secret' => Setting::getValue('razorpay_key_secret', ''),
-            'cashfree_app_id' => Setting::getValue('cashfree_app_id', ''),
-            'cashfree_secret_key' => Setting::getValue('cashfree_secret_key', ''),
+            'paytm_mid' => $paytmToken ? $paytmToken->mid : '',
             'upi_id' => Setting::getValue('upi_id', ''),
             'upi_name' => Setting::getValue('upi_name', ''),
             
@@ -405,7 +406,15 @@ class AdminDashboardController extends Controller
             'website_name' => Setting::getValue('website_name', 'Chetak Pay'),
             'website_logo' => Setting::getValue('website_logo', ''),
             'support_contact' => Setting::getValue('support_contact', 'support@chetakpay.com'),
-            'otp_api_key' => Setting::getValue('otp_api_key', 'DEFAULT_OTP_API_KEY'),
+            'otp_provider' => Setting::getValue('otp_provider', 'fast2sms'),
+            'fast2sms_api_url' => Setting::getValue('fast2sms_api_url', 'https://www.fast2sms.com/dev/bulkV2'),
+            'fast2sms_api_key' => Setting::getValue('fast2sms_api_key', 'DEFAULT_OTP_API_KEY'),
+            'fast2sms_template_id' => Setting::getValue('fast2sms_template_id', '194943'),
+            'otpwala_api_url' => Setting::getValue('otpwala_api_url', 'https://sms.otpwala.com/dev/bulkV2'),
+            'otpwala_api_key' => Setting::getValue('otpwala_api_key', '3YVsA9uCXvxwloUt9MkkyHpBlDgFzacG6b1iKhP0TW7INL4m8RY4dqlEsH3bvcNa9QgKVhnpeAZwr5xu'),
+            'otpwala_template_id' => Setting::getValue('otpwala_template_id', '12294'),
+            'otp_route' => Setting::getValue('otp_route', 'dlt'),
+            'otp_sender_id' => Setting::getValue('otp_sender_id', 'FOTPSM'),
             'feature_referrals' => Setting::getValue('feature_referrals', '1'),
             'feature_rewards' => Setting::getValue('feature_rewards', '1'),
             'app_version' => Setting::getValue('app_version', '1.0.0'),
@@ -417,6 +426,9 @@ class AdminDashboardController extends Controller
             'about_us' => Setting::getValue('about_us', ''),
             'terms_conditions' => Setting::getValue('terms_conditions', ''),
             'commission_percentage' => Setting::getValue('commission_percentage', '3.8'),
+            'welcome_bonus_amount' => Setting::getValue('welcome_bonus_amount', '50.00'),
+            'daily_attendance_bonus_amount' => Setting::getValue('daily_attendance_bonus_amount', '5.00'),
+            'referral_commission_percentage' => Setting::getValue('referral_commission_percentage', '10.0'),
         ];
 
         return view('admin.settings', compact('settings'));
@@ -428,19 +440,24 @@ class AdminDashboardController extends Controller
     public function saveSettings(Request $request)
     {
         $request->validate([
-            'active_gateway' => 'required|in:razorpay,cashfree,upi_qr,manual_qr',
-            'razorpay_key_id' => 'nullable|string',
-            'razorpay_key_secret' => 'nullable|string',
-            'cashfree_app_id' => 'nullable|string',
-            'cashfree_secret_key' => 'nullable|string',
+            'active_gateway' => 'required|in:upi_qr,manual_qr',
             'upi_id' => 'nullable|string',
             'upi_name' => 'nullable|string',
+            'paytm_mid' => 'nullable|string',
             
             // New settings validations
             'website_name' => 'required|string|max:255',
             'website_logo' => 'nullable|url',
             'support_contact' => 'required|string',
-            'otp_api_key' => 'nullable|string',
+            'otp_provider' => 'required|in:fast2sms,otpwala',
+            'fast2sms_api_url' => 'nullable|url',
+            'fast2sms_api_key' => 'nullable|string',
+            'fast2sms_template_id' => 'nullable|string',
+            'otpwala_api_url' => 'nullable|url',
+            'otpwala_api_key' => 'nullable|string',
+            'otpwala_template_id' => 'nullable|string',
+            'otp_route' => 'nullable|string',
+            'otp_sender_id' => 'nullable|string',
             'app_version' => 'required|string',
             'app_update_url' => 'nullable|url',
             'maintenance_message' => 'nullable|string',
@@ -448,20 +465,27 @@ class AdminDashboardController extends Controller
             'about_us' => 'nullable|string',
             'terms_conditions' => 'nullable|string',
             'commission_percentage' => 'required|numeric|min:0|max:100',
+            'welcome_bonus_amount' => 'required|numeric|min:0',
+            'daily_attendance_bonus_amount' => 'required|numeric|min:0',
+            'referral_commission_percentage' => 'required|numeric|min:0|max:100',
         ]);
 
         $keys = [
             'active_gateway',
-            'razorpay_key_id',
-            'razorpay_key_secret',
-            'cashfree_app_id',
-            'cashfree_secret_key',
             'upi_id',
             'upi_name',
             'website_name',
             'website_logo',
             'support_contact',
-            'otp_api_key',
+            'otp_provider',
+            'fast2sms_api_url',
+            'fast2sms_api_key',
+            'fast2sms_template_id',
+            'otpwala_api_url',
+            'otpwala_api_key',
+            'otpwala_template_id',
+            'otp_route',
+            'otp_sender_id',
             'app_version',
             'app_update_url',
             'maintenance_message',
@@ -469,6 +493,9 @@ class AdminDashboardController extends Controller
             'about_us',
             'terms_conditions',
             'commission_percentage',
+            'welcome_bonus_amount',
+            'daily_attendance_bonus_amount',
+            'referral_commission_percentage',
         ];
 
         foreach ($keys as $key) {
@@ -477,13 +504,33 @@ class AdminDashboardController extends Controller
             }
         }
 
+        // Sync Reward amounts with the newly saved settings
+        if ($request->has('welcome_bonus_amount')) {
+            \App\Models\Reward::where('category', 'newbie')->update([
+                'amount' => $request->input('welcome_bonus_amount')
+            ]);
+        }
+        if ($request->has('daily_attendance_bonus_amount')) {
+            \App\Models\Reward::where('category', 'daily')->update([
+                'amount' => $request->input('daily_attendance_bonus_amount')
+            ]);
+        }
+
         // Handle checkboxes/toggles
         Setting::setValue('feature_referrals', $request->has('feature_referrals') ? '1' : '0');
         Setting::setValue('feature_rewards', $request->has('feature_rewards') ? '1' : '0');
         Setting::setValue('app_force_update', $request->has('app_force_update') ? '1' : '0');
         Setting::setValue('maintenance_mode', $request->has('maintenance_mode') ? '1' : '0');
 
-        $this->logAction('Update System Settings', "Updated website, gate, and app settings.");
+        if ($request->has('paytm_mid')) {
+            $adminId = auth()->id() ?: 1;
+            \Illuminate\Support\Facades\DB::table('paytm_tokens')->updateOrInsert(
+                ['user_id' => $adminId],
+                ['mid' => $request->input('paytm_mid'), 'updated_at' => now()]
+            );
+        }
+
+        $this->logAction('Update System Settings', "Updated website, gate, bonus, and app settings.");
 
         return back()->with('success', 'System configurations updated successfully.');
     }

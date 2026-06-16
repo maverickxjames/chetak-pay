@@ -226,18 +226,152 @@ class AuthTest extends TestCase
             'mobile' => '9876543210',
             'name' => 'John Doe'
         ]);
-
+ 
         $token = $user->createToken('test_token')->plainTextToken;
-
+ 
         $response = $this->withHeader('Authorization', 'Bearer ' . $token)
             ->postJson('/api/v1/logout');
-
+ 
         $response->assertStatus(200)
             ->assertJson([
                 'success' => true,
                 'message' => 'Logged out successfully.'
             ]);
-
+ 
         $this->assertCount(0, $user->tokens);
+    }
+ 
+    /**
+     * Test login succeeds with correct credentials.
+     */
+    public function test_login_succeeds_with_correct_credentials(): void
+    {
+        User::create([
+            'mobile' => '9876543210',
+            'name' => 'Test User',
+            'password' => \Illuminate\Support\Facades\Hash::make('password123')
+        ]);
+ 
+        $response = $this->postJson('/api/v1/login', [
+            'mobile' => '9876543210',
+            'password' => 'password123'
+        ]);
+ 
+        $response->assertStatus(200)
+            ->assertJsonPath('success', true);
+        $this->assertNotNull($response->json('data.token'));
+    }
+ 
+    /**
+     * Test login fails for incorrect credentials.
+     */
+    public function test_login_fails_for_incorrect_credentials(): void
+    {
+        User::create([
+            'mobile' => '9876543210',
+            'name' => 'Test User',
+            'password' => \Illuminate\Support\Facades\Hash::make('password123')
+        ]);
+ 
+        $response = $this->postJson('/api/v1/login', [
+            'mobile' => '9876543210',
+            'password' => 'wrongpassword'
+        ]);
+ 
+        $response->assertStatus(422)
+            ->assertJsonPath('success', false);
+    }
+ 
+    /**
+     * Test register request dispatches OTP.
+     */
+    public function test_register_request_succeeds_and_creates_otp_record(): void
+    {
+        $response = $this->postJson('/api/v1/register/request', [
+            'name' => 'Jane Smith',
+            'mobile' => '9999988888',
+            'password' => 'password123',
+            'email' => 'jane@example.com'
+        ]);
+ 
+        $response->assertStatus(200)
+            ->assertJsonPath('success', true);
+ 
+        $this->assertDatabaseHas('otps', [
+            'mobile' => '9999988888'
+        ]);
+ 
+        $otp = Otp::where('mobile', '9999988888')->orderBy('created_at', 'desc')->first();
+        $this->assertNotNull($otp->payload);
+        $payload = json_decode($otp->payload, true);
+        $this->assertEquals('Jane Smith', $payload['name']);
+    }
+ 
+    /**
+     * Test register verification creates user.
+     */
+    public function test_register_verify_creates_user_and_logs_in(): void
+    {
+        $payload = json_encode([
+            'name' => 'Verification User',
+            'password' => \Illuminate\Support\Facades\Hash::make('password123'),
+            'email' => 'verif@example.com'
+        ]);
+ 
+        Otp::create([
+            'mobile' => '9999900000',
+            'otp' => '654321',
+            'expires_at' => Carbon::now()->addMinutes(10),
+            'verified' => false,
+            'payload' => $payload
+        ]);
+ 
+        $response = $this->postJson('/api/v1/register/verify', [
+            'mobile' => '9999900000',
+            'otp' => '654321'
+        ]);
+ 
+        $response->assertStatus(200)
+            ->assertJsonPath('success', true);
+ 
+        $this->assertDatabaseHas('users', [
+            'mobile' => '9999900000',
+            'name' => 'Verification User',
+            'email' => 'verif@example.com'
+        ]);
+    }
+ 
+    /**
+     * Test forget password and reset flow.
+     */
+    public function test_forget_password_and_reset_flow(): void
+    {
+        $user = User::create([
+            'mobile' => '9876543210',
+            'name' => 'Test User',
+            'password' => \Illuminate\Support\Facades\Hash::make('oldpassword')
+        ]);
+ 
+        $response = $this->postJson('/api/v1/forget-password', [
+            'mobile' => '9876543210'
+        ]);
+ 
+        $response->assertStatus(200)
+            ->assertJsonPath('success', true);
+ 
+        $otp = Otp::where('mobile', '9876543210')->orderBy('created_at', 'desc')->first();
+        $this->assertNotNull($otp);
+ 
+        $response = $this->postJson('/api/v1/reset-password', [
+            'mobile' => '9876543210',
+            'otp' => $otp->otp,
+            'new_password' => 'newpassword123'
+        ]);
+ 
+        $response->assertStatus(200)
+            ->assertJsonPath('success', true);
+ 
+        $user = $user->fresh();
+        $this->assertTrue(\Illuminate\Support\Facades\Hash::check('newpassword123', $user->password));
     }
 }

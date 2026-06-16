@@ -13,6 +13,11 @@ use App\Http\Controllers\Api\v1\OrderController;
 Route::prefix('v1')->group(function () {
     Route::post('/send-otp', [AuthController::class, 'sendOtp']);
     Route::post('/verify-otp', [AuthController::class, 'verifyOtp']);
+    Route::post('/login', [AuthController::class, 'login']);
+    Route::post('/register/request', [AuthController::class, 'registerRequest']);
+    Route::post('/register/verify', [AuthController::class, 'registerVerify']);
+    Route::post('/forget-password', [AuthController::class, 'forgetPassword']);
+    Route::post('/reset-password', [AuthController::class, 'resetPassword']);
     Route::get('/config', [\App\Http\Controllers\Api\v1\ConfigController::class, 'getConfig']);
     
     Route::middleware(['auth:sanctum', 'check_blocked'])->group(function () {

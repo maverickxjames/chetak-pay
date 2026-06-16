@@ -158,7 +158,7 @@
 
                     <!-- Mock Asset Plan Cards -->
                     <div class="mt-4 space-y-2 grow flex flex-col justify-center">
-                        <p class="text-[9px] uppercase font-bold tracking-wider text-gray-400">Available Investment Tiers</p>
+                        <p class="text-[9px] uppercase font-bold tracking-wider text-gray-400">Available Investment Plans</p>
                         <!-- Plan 1 -->
                         <div class="p-3 bg-white/5 rounded-xl border border-white/10 flex justify-between items-center">
                             <div>

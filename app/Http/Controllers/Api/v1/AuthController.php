@@ -15,6 +15,64 @@ use Illuminate\Support\Str;
 class AuthController extends Controller
 {
     /**
+     * Helper to generate and dispatch OTP SMS.
+     */
+    private function dispatchOtp(string $mobile, ?string $payload = null): bool
+    {
+        // Generate OTP
+        $otpCode = config('app.env') !== 'production' && env('DEV_OTP') 
+            ? env('DEV_OTP') 
+            : str_pad(random_int(100000, 999999), 6, '0', STR_PAD_LEFT);
+ 
+        // Store OTP
+        Otp::create([
+            'mobile' => $mobile,
+            'otp' => $otpCode,
+            'expires_at' => Carbon::now()->addMinutes(10),
+            'verified' => false,
+            'payload' => $payload,
+        ]);
+ 
+        // Log OTP in development/local
+        Log::info("OTP for mobile {$mobile}: {$otpCode}");
+ 
+        // Determine active OTP provider settings
+        $otpProvider = \App\Models\Setting::getValue('otp_provider', 'fast2sms');
+        $otpRoute = \App\Models\Setting::getValue('otp_route', 'dlt');
+        $otpSenderId = \App\Models\Setting::getValue('otp_sender_id', 'FOTPSM');
+
+        if ($otpProvider === 'otpwala') {
+            $otpApiUrl = \App\Models\Setting::getValue('otpwala_api_url', 'https://sms.otpwala.com/dev/bulkV2');
+            $otpApiKey = \App\Models\Setting::getValue('otpwala_api_key', '');
+            $otpTemplateId = \App\Models\Setting::getValue('otpwala_template_id', '12294');
+        } else {
+            // Default to fast2sms settings (fallback to legacy values if new keys aren't set)
+            $otpApiUrl = \App\Models\Setting::getValue('fast2sms_api_url', \App\Models\Setting::getValue('otp_api_url', 'https://www.fast2sms.com/dev/bulkV2'));
+            $otpApiKey = \App\Models\Setting::getValue('fast2sms_api_key', \App\Models\Setting::getValue('otp_api_key', 'DEFAULT_OTP_API_KEY'));
+            $otpTemplateId = \App\Models\Setting::getValue('fast2sms_template_id', \App\Models\Setting::getValue('otp_template_id', '194943'));
+        }
+
+        if ($otpApiKey && $otpApiKey !== 'DEFAULT_OTP_API_KEY') {
+            try {
+                $response = \Illuminate\Support\Facades\Http::get($otpApiUrl, [
+                    'authorization' => $otpApiKey,
+                    'route' => $otpRoute,
+                    'sender_id' => $otpSenderId,
+                    'message' => $otpTemplateId,
+                    'variables_values' => $otpCode . '|',
+                    'numbers' => $mobile,
+                    'schedule_time' => ''
+                ]);
+                Log::info("Sending SMS via active provider ({$otpProvider}). Status: " . $response->status() . ", Response: " . $response->body());
+            } catch (\Exception $e) {
+                Log::error("Failed to send OTP SMS via active provider ({$otpProvider}): " . $e->getMessage());
+            }
+        }
+ 
+        return true;
+    }
+ 
+    /**
      * Send OTP to the user's mobile number.
      */
     public function sendOtp(Request $request)
@@ -22,31 +80,9 @@ class AuthController extends Controller
         $request->validate([
             'mobile' => ['required', 'string', 'regex:/^[0-9]{10,15}$/'],
         ]);
-
-        $mobile = $request->mobile;
-        
-        // Generate OTP
-        $otpCode = config('app.env') !== 'production' && env('DEV_OTP') 
-            ? env('DEV_OTP') 
-            : str_pad(random_int(100000, 999999), 6, '0', STR_PAD_LEFT);
-
-        // Store OTP
-        Otp::create([
-            'mobile' => $mobile,
-            'otp' => $otpCode,
-            'expires_at' => Carbon::now()->addMinutes(10),
-            'verified' => false,
-        ]);
-
-        // Log OTP in development/local
-        Log::info("OTP for mobile {$mobile}: {$otpCode}");
-
-        // Handle custom OTP API Key logging
-        $otpApiKey = \App\Models\Setting::getValue('otp_api_key');
-        if ($otpApiKey && $otpApiKey !== 'DEFAULT_OTP_API_KEY') {
-            Log::info("Sending SMS via configured API gateway. Key: " . substr($otpApiKey, 0, 5) . "...");
-        }
-
+ 
+        $this->dispatchOtp($request->mobile);
+ 
         return response()->json([
             'success' => true,
             'message' => 'OTP sent successfully.',
@@ -227,14 +263,268 @@ class AuthController extends Controller
         $request->validate([
             'fcm_token' => ['required', 'string'],
         ]);
-
+ 
         $user = $request->user();
         $user->fcm_token = $request->fcm_token;
         $user->save();
-
+ 
         return response()->json([
             'success' => true,
             'message' => 'FCM token updated successfully.',
+            'data' => (object)[]
+        ]);
+    }
+ 
+    /**
+     * Log in a user using mobile and password.
+     */
+    public function login(Request $request)
+    {
+        $request->validate([
+            'mobile' => ['required', 'string', 'regex:/^[0-9]{10,15}$/'],
+            'password' => ['required', 'string'],
+        ]);
+ 
+        $user = User::where('mobile', $request->mobile)->first();
+ 
+        if (!$user || !\Illuminate\Support\Facades\Hash::check($request->password, $user->password)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid credentials.',
+                'data' => (object)[]
+            ], 422);
+        }
+ 
+        if ($user->is_blocked) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Your account has been blocked by the administrator.',
+                'data' => (object)[]
+            ], 403);
+        }
+ 
+        $token = $user->createToken('auth_token')->plainTextToken;
+ 
+        return response()->json([
+            'success' => true,
+            'message' => 'Logged in successfully.',
+            'data' => [
+                'token' => $token,
+                'is_new_user' => false,
+                'user' => $user
+            ]
+        ]);
+    }
+ 
+    /**
+     * Request a new registration (sends validation OTP).
+     */
+    public function registerRequest(Request $request)
+    {
+        $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'mobile' => ['required', 'string', 'regex:/^[0-9]{10,15}$/', 'unique:users,mobile'],
+            'password' => ['required', 'string', 'min:6'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'referral_code' => ['nullable', 'string', 'exists:users,referral_code'],
+        ], [
+            'referral_code.exists' => 'The provided referral code is invalid.',
+            'mobile.unique' => 'The mobile number has already been registered.',
+        ]);
+ 
+        $payload = json_encode([
+            'name' => $request->name,
+            'password' => \Illuminate\Support\Facades\Hash::make($request->password),
+            'email' => $request->email,
+            'referral_code' => $request->referral_code
+        ]);
+ 
+        $this->dispatchOtp($request->mobile, $payload);
+ 
+        return response()->json([
+            'success' => true,
+            'message' => 'OTP sent successfully for verification.',
+            'data' => (object)[]
+        ]);
+    }
+ 
+    /**
+     * Verify registration OTP and create user.
+     */
+    public function registerVerify(Request $request)
+    {
+        $request->validate([
+            'mobile' => ['required', 'string', 'regex:/^[0-9]{10,15}$/'],
+            'otp' => ['required', 'string', 'size:6'],
+        ]);
+ 
+        $mobile = $request->mobile;
+        $otpCode = $request->otp;
+ 
+        $otp = Otp::where('mobile', $mobile)
+            ->where('otp', $otpCode)
+            ->where('verified', false)
+            ->where('expires_at', '>', Carbon::now())
+            ->orderBy('created_at', 'desc')
+            ->first();
+ 
+        if (!$otp || empty($otp->payload)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid or expired OTP.',
+                'data' => (object)[]
+            ], 422);
+        }
+ 
+        $payload = json_decode($otp->payload, true);
+        if (!$payload) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid registration data.',
+                'data' => (object)[]
+            ], 422);
+        }
+ 
+        // Mark OTP as verified
+        $otp->update(['verified' => true]);
+ 
+        // Check if user already exists
+        if (User::where('mobile', $mobile)->exists()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'The mobile number has already been registered.',
+                'data' => (object)[]
+            ], 422);
+        }
+ 
+        // Create the user
+        $user = User::create([
+            'mobile' => $mobile,
+            'name' => $payload['name'],
+            'email' => $payload['email'] ?? null,
+            'password' => $payload['password'],
+            'wallet_balance' => 0.00,
+            'total_investment' => 0.00,
+            'total_commission' => 0.00,
+            'total_withdrawn' => 0.00,
+        ]);
+ 
+        // Generate unique referral code for this user
+        do {
+            $code = 'CP' . strtoupper(Str::random(6));
+        } while (User::where('referral_code', $code)->exists());
+        $user->referral_code = $code;
+ 
+        // Process referral link if referrer code was supplied
+        if (!empty($payload['referral_code'])) {
+            $referrer = User::where('referral_code', $payload['referral_code'])->first();
+            if ($referrer && $referrer->id !== $user->id) {
+                $user->referred_by = $referrer->id;
+            }
+        }
+        $user->save();
+ 
+        // Create Sanctum Token
+        $token = $user->createToken('auth_token')->plainTextToken;
+ 
+        return response()->json([
+            'success' => true,
+            'message' => 'Registration completed successfully.',
+            'data' => [
+                'token' => $token,
+                'is_new_user' => false,
+                'user' => $user
+            ]
+        ]);
+    }
+ 
+    /**
+     * Send OTP for forget password request.
+     */
+    public function forgetPassword(Request $request)
+    {
+        $request->validate([
+            'mobile' => ['required', 'string', 'regex:/^[0-9]{10,15}$/'],
+        ]);
+ 
+        $user = User::where('mobile', $request->mobile)->first();
+ 
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No user account found with this mobile number.',
+                'data' => (object)[]
+            ], 422);
+        }
+ 
+        $payload = json_encode(['action' => 'password_reset']);
+        $this->dispatchOtp($request->mobile, $payload);
+ 
+        return response()->json([
+            'success' => true,
+            'message' => 'Password reset OTP sent successfully.',
+            'data' => (object)[]
+        ]);
+    }
+ 
+    /**
+     * Reset the user password using OTP verification.
+     */
+    public function resetPassword(Request $request)
+    {
+        $request->validate([
+            'mobile' => ['required', 'string', 'regex:/^[0-9]{10,15}$/'],
+            'otp' => ['required', 'string', 'size:6'],
+            'new_password' => ['required', 'string', 'min:6'],
+        ]);
+ 
+        $mobile = $request->mobile;
+        $otpCode = $request->otp;
+ 
+        $otp = Otp::where('mobile', $mobile)
+            ->where('otp', $otpCode)
+            ->where('verified', false)
+            ->where('expires_at', '>', Carbon::now())
+            ->orderBy('created_at', 'desc')
+            ->first();
+ 
+        if (!$otp || empty($otp->payload)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid or expired OTP.',
+                'data' => (object)[]
+            ], 422);
+        }
+ 
+        $payload = json_decode($otp->payload, true);
+        if (!$payload || ($payload['action'] ?? '') !== 'password_reset') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid reset action request.',
+                'data' => (object)[]
+            ], 422);
+        }
+ 
+        // Find the user
+        $user = User::where('mobile', $mobile)->first();
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'User account not found.',
+                'data' => (object)[]
+            ], 422);
+        }
+ 
+        // Mark OTP verified
+        $otp->update(['verified' => true]);
+ 
+        // Update password
+        $user->password = \Illuminate\Support\Facades\Hash::make($request->new_password);
+        $user->save();
+ 
+        return response()->json([
+            'success' => true,
+            'message' => 'Password reset successfully.',
             'data' => (object)[]
         ]);
     }

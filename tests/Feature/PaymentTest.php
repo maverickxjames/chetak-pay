@@ -72,7 +72,7 @@ class PaymentTest extends TestCase
         $response = $this->actingAs($user, 'sanctum')
             ->postJson('/api/v1/orders', [
                 'plan_id' => $plan->id,
-                'payment_method' => 'razorpay'
+                'payment_method' => 'upi_qr'
             ]);
 
         $response->assertStatus(200)
@@ -93,8 +93,12 @@ class PaymentTest extends TestCase
                         'order_id',
                         'amount',
                         'currency',
-                        'razorpay_key_id',
-                        'razorpay_order_id'
+                        'paytm',
+                        'gpay',
+                        'cred',
+                        'upi',
+                        'qr',
+                        'byteTransactionId',
                     ]
                 ]
             ]);
@@ -103,7 +107,7 @@ class PaymentTest extends TestCase
             'user_id' => $user->id,
             'plan_id' => $plan->id,
             'status' => 'pending',
-            'payment_method' => 'razorpay'
+            'payment_method' => 'upi_qr'
         ]);
     }
 
@@ -112,6 +116,14 @@ class PaymentTest extends TestCase
      */
     public function test_payment_verification_success()
     {
+        // 1. Seed Paytm Token
+        \Illuminate\Support\Facades\DB::table('paytm_tokens')->insert([
+            'user_id' => 1,
+            'mid' => 'TEST_MID_123',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
         $user = User::create(['mobile' => '9876543210', 'name' => 'John', 'total_investment' => 0.00]);
         $plan = Plan::where('name', 'Starter I')->first();
 
@@ -122,11 +134,21 @@ class PaymentTest extends TestCase
             'amount' => $plan->amount,
             'status' => 'pending',
             'payment_method' => 'upi_qr',
+            'byteTransactionId' => 'TXN_TEST_123',
+        ]);
+
+        // Mock Paytm order status check
+        \Illuminate\Support\Facades\Http::fake([
+            'https://securegw.paytm.in/order/status*' => \Illuminate\Support\Facades\Http::response([
+                'STATUS' => 'TXN_SUCCESS',
+                'TXNAMOUNT' => '1000.00',
+                'BANKTXNID' => 'BANK_TXN_TEST_123'
+            ], 200)
         ]);
 
         $response = $this->actingAs($user, 'sanctum')
             ->postJson("/api/v1/orders/{$order->id}/verify", [
-                'payment_txid' => 'UTR1234567890'
+                'payment_txid' => null
             ]);
 
         $response->assertStatus(200)
@@ -157,7 +179,7 @@ class PaymentTest extends TestCase
     }
 
     /**
-     * Test payment verification credits referral commission to parent.
+     * Test manual QR verification saves UTR but stays pending, and then admin approval credits parent.
      */
     public function test_payment_verification_credits_referral()
     {
@@ -186,12 +208,39 @@ class PaymentTest extends TestCase
             'payment_method' => 'manual_qr',
         ]);
 
+        // 1. Submit UTR (12-digit) via API. Verify that it saves UTR but remains pending.
         $response = $this->actingAs($user, 'sanctum')
             ->postJson("/api/v1/orders/{$order->id}/verify", [
-                'payment_txid' => 'UTR777888'
+                'payment_txid' => '123456789012'
             ]);
 
-        $response->assertStatus(200);
+        $response->assertStatus(200)
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.status', 'pending');
+
+        $this->assertDatabaseHas('orders', [
+            'id' => 'ORDTEST999',
+            'status' => 'pending',
+            'payment_txid' => '123456789012'
+        ]);
+
+        // Referrer should NOT get commission yet
+        $this->assertEquals(0.00, $referrer->fresh()->wallet_balance);
+
+        // 2. Approve order by admin and check that referrer gets commission
+        $admin = User::create([
+            'mobile' => '9999999999',
+            'name' => 'Admin User',
+            'is_admin' => true,
+        ]);
+
+        // Disable CSRF for admin request
+        $this->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class);
+
+        $adminResponse = $this->actingAs($admin)
+            ->post("/admin/orders/{$order->id}/approve");
+
+        $adminResponse->assertRedirect();
 
         // Referrer should get 10% commission = 500.00
         $referrer = $referrer->fresh();

@@ -13,7 +13,10 @@ class NotificationController extends Controller
      */
     public function index(Request $request)
     {
-        $notifications = Notification::orderBy('created_at', 'desc')
+        $user = $request->user();
+        $notifications = Notification::whereNull('user_id')
+            ->orWhere('user_id', $user->id)
+            ->orderBy('created_at', 'desc')
             ->get()
             ->map(function ($notif) {
                 return [

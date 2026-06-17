@@ -3,7 +3,11 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Admin\AdminAuthController;
 use App\Http\Controllers\Admin\AdminDashboardController;
+use App\Http\Controllers\WebPaymentController;
 use App\Models\Setting;
+
+Route::get('/pay/{order_id}', [WebPaymentController::class, 'showPayPage'])->name('payment.share');
+Route::post('/pay/{order_id}/verify', [WebPaymentController::class, 'verifyPayPage'])->name('payment.share.verify');
 
 Route::get('/', function () {
     $settings = [

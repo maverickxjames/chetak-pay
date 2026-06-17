@@ -273,4 +273,167 @@ class PaymentTest extends TestCase
 
         $this->assertEquals('dummy_fcm_token_string', $user->fresh()->fcm_token);
     }
+
+    /**
+     * Test rotation/random selection of UPI IDs.
+     */
+    public function test_upi_rotation()
+    {
+        $user = User::create(['mobile' => '9876543210', 'name' => 'John']);
+        $plan = Plan::where('name', 'Starter I')->first();
+
+        // Configure multiple UPI IDs in settings for manual QR
+        \App\Models\Setting::setValue('manual_upi_ids', 'upi1@okaxis, upi2@okaxis, upi3@okaxis');
+
+        $selectedUpiIds = [];
+        for ($i = 0; $i < 10; $i++) {
+            $response = $this->actingAs($user, 'sanctum')
+                ->postJson('/api/v1/orders', [
+                    'plan_id' => $plan->id,
+                    'payment_method' => 'manual_qr'
+                ]);
+
+            $response->assertStatus(200);
+            $selectedUpiIds[] = $response->json('data.order.upi');
+        }
+
+        // Check that only configured UPI IDs were chosen
+        $this->assertNotEmpty($selectedUpiIds);
+        foreach ($selectedUpiIds as $upi) {
+            $this->assertContains($upi, ['upi1@okaxis', 'upi2@okaxis', 'upi3@okaxis']);
+        }
+        // Since we ran it 10 times, we expect at least 2 unique UPI IDs to show random selection (highly probable)
+        $uniqueSelected = array_unique($selectedUpiIds);
+        $this->assertGreaterThan(1, count($uniqueSelected));
+    }
+
+    /**
+     * Test the public web checkout page returns 200.
+     */
+    public function test_public_checkout_page()
+    {
+        $user = User::create(['mobile' => '9876543210', 'name' => 'John']);
+        $plan = Plan::where('name', 'Starter I')->first();
+
+        $order = Order::create([
+            'id' => 'ORDWEB123',
+            'user_id' => $user->id,
+            'plan_id' => $plan->id,
+            'amount' => $plan->amount,
+            'status' => 'pending',
+            'payment_method' => 'upi_qr',
+            'byteTransactionId' => 'TXNWEB123',
+        ]);
+
+        $response = $this->get("/pay/{$order->id}");
+
+        $response->assertStatus(200)
+            ->assertSee('ORDWEB123')
+            ->assertSee('1000.00')
+            ->assertSee('Starter I');
+    }
+
+    /**
+     * Test public checkout verification for upi_qr Paytm status.
+     */
+    public function test_public_checkout_verify_upi_qr()
+    {
+        \Illuminate\Support\Facades\DB::table('paytm_tokens')->insert([
+            'user_id' => 1,
+            'mid' => 'TEST_MID_123',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $user = User::create(['mobile' => '9876543210', 'name' => 'John', 'total_investment' => 0.00]);
+        $plan = Plan::where('name', 'Starter I')->first();
+
+        $order = Order::create([
+            'id' => 'ORDWEB555',
+            'user_id' => $user->id,
+            'plan_id' => $plan->id,
+            'amount' => $plan->amount,
+            'status' => 'pending',
+            'payment_method' => 'upi_qr',
+            'byteTransactionId' => 'TXNWEB555',
+        ]);
+
+        // Mock Paytm order status check
+        \Illuminate\Support\Facades\Http::fake([
+            'https://securegw.paytm.in/order/status*' => \Illuminate\Support\Facades\Http::response([
+                'STATUS' => 'TXN_SUCCESS',
+                'TXNAMOUNT' => '1000.00',
+                'BANKTXNID' => 'BANK_TXN_WEB_555'
+            ], 200)
+        ]);
+
+        $response = $this->postJson("/pay/{$order->id}/verify");
+
+        $response->assertStatus(200)
+            ->assertJsonPath('success', true);
+
+        // Verify order is activated and user balance is credited
+        $this->assertEquals('active', $order->fresh()->status);
+        $this->assertEquals(1000.00, $user->fresh()->total_investment);
+    }
+
+    /**
+     * Test public checkout verification for manual_qr UTR.
+     */
+    public function test_public_checkout_verify_manual_qr()
+    {
+        $user = User::create(['mobile' => '9876543210', 'name' => 'John']);
+        $plan = Plan::where('name', 'Starter I')->first();
+
+        $order = Order::create([
+            'id' => 'ORDWEB777',
+            'user_id' => $user->id,
+            'plan_id' => $plan->id,
+            'amount' => $plan->amount,
+            'status' => 'pending',
+            'payment_method' => 'manual_qr',
+        ]);
+
+        $response = $this->postJson("/pay/{$order->id}/verify", [
+            'payment_txid' => '987654321012'
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJsonPath('success', true);
+
+        $this->assertEquals('pending', $order->fresh()->status);
+        $this->assertEquals('987654321012', $order->fresh()->payment_txid);
+    }
+
+    public function test_order_creation_fails_when_gateway_disabled()
+    {
+        $user = User::create(['mobile' => '9876543210', 'name' => 'John']);
+        $plan = Plan::where('name', 'Starter I')->first();
+
+        // 1. Disable Paytm auto gateway
+        \App\Models\Setting::setValue('gateway_upi_qr_enabled', '0');
+
+        $response = $this->actingAs($user, 'sanctum')
+            ->postJson('/api/v1/orders', [
+                'plan_id' => $plan->id,
+                'payment_method' => 'upi_qr'
+            ]);
+
+        $response->assertStatus(422)
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('message', 'Paytm Auto Gateway is currently disabled.');
+
+        // 2. Disable manual gateway
+        \App\Models\Setting::setValue('gateway_manual_qr_enabled', '0');
+
+        $response = $this->actingAs($user, 'sanctum')
+            ->postJson('/api/v1/orders', [
+                'plan_id' => $plan->id,
+                'payment_method' => 'manual_qr'
+            ]);
+
+        $response->assertStatus(422)
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('message', 'Manual QR Gateway is currently disabled.');
+    }
 }

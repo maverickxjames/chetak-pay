@@ -23,6 +23,8 @@ class Order extends Model
         'payment_txid',
         'commission_earned',
         'completed_at',
+        'upi',
+        'byteTransactionId',
     ];
 
     protected $casts = [

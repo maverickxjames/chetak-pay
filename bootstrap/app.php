@@ -16,6 +16,10 @@ return Application::configure(basePath: dirname(__DIR__))
             'admin' => \App\Http\Middleware\AdminMiddleware::class,
             'check_blocked' => \App\Http\Middleware\CheckBlocked::class,
         ]);
+
+        $middleware->validateCsrfTokens(except: [
+            '/pay/*/verify',
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->render(function (\Throwable $e, \Illuminate\Http\Request $request) {

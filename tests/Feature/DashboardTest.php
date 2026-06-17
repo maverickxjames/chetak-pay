@@ -75,47 +75,23 @@ class DashboardTest extends TestCase
                 'message' => 'Rewards retrieved successfully.'
             ]);
 
-        // Newbie should be claimable, team reward should be locked (0 referrals < 3 required)
+        // Newbie is excluded, Daily should be claimable, Team reward should be locked (0 referrals < 3 required)
         $rewardsData = $response->json('data');
-        $this->assertEquals('CLAIMABLE', $rewardsData[0]['status']); // newbie
-        $this->assertEquals('CLAIMABLE', $rewardsData[1]['status']); // daily
-        $this->assertEquals('LOCKED', $rewardsData[2]['status']); // team
+        $this->assertCount(2, $rewardsData);
+        $this->assertEquals('CLAIMABLE', $rewardsData[0]['status']); // daily
+        $this->assertEquals('LOCKED', $rewardsData[1]['status']); // team
     }
 
-    /**
-     * Test POST /api/v1/rewards/{id}/claim.
-     */
-    public function test_rewards_claim_newbie_success(): void
+    public function test_rewards_claim_newbie_manual_claim_disabled(): void
     {
         $response = $this->actingAs($this->user, 'sanctum')
             ->postJson("/api/v1/rewards/{$this->newbieReward->id}/claim");
 
-        $response->assertStatus(200)
+        $response->assertStatus(422)
             ->assertJson([
-                'success' => true,
-                'message' => 'Reward claimed successfully.',
-                'data' => [
-                    'wallet_balance' => '50.00'
-                ]
+                'success' => false,
+                'message' => 'Welcome bonus is automatically credited on registration.'
             ]);
-
-        // Verify balance updated, transaction and user_rewards created
-        $this->assertDatabaseHas('users', [
-            'id' => $this->user->id,
-            'wallet_balance' => 50.00,
-            'total_commission' => 50.00
-        ]);
-
-        $this->assertDatabaseHas('user_rewards', [
-            'user_id' => $this->user->id,
-            'reward_id' => $this->newbieReward->id
-        ]);
-
-        $this->assertDatabaseHas('transactions', [
-            'user_id' => $this->user->id,
-            'type' => 'incentive',
-            'amount' => 50.00
-        ]);
     }
 
     /**
@@ -123,15 +99,15 @@ class DashboardTest extends TestCase
      */
     public function test_cannot_claim_same_reward_twice(): void
     {
-        // Pre-claim the reward
+        // Pre-claim the daily reward
         UserReward::create([
             'user_id' => $this->user->id,
-            'reward_id' => $this->newbieReward->id,
+            'reward_id' => $this->dailyReward->id,
             'claimed_at' => now()
         ]);
 
         $response = $this->actingAs($this->user, 'sanctum')
-            ->postJson("/api/v1/rewards/{$this->newbieReward->id}/claim");
+            ->postJson("/api/v1/rewards/{$this->dailyReward->id}/claim");
 
         $response->assertStatus(422)
             ->assertJson([
@@ -217,5 +193,37 @@ class DashboardTest extends TestCase
             ]);
 
         $this->assertCount(1, $response->json('data'));
+    }
+
+    /**
+     * Test rewards endpoint hides disabled newbie and daily rewards, and claim fails.
+     */
+    public function test_rewards_respect_toggles(): void
+    {
+        // 1. Disable Daily Attendance Bonus
+        \App\Models\Setting::setValue('daily_attendance_bonus_enabled', '0');
+
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->getJson('/api/v1/rewards');
+
+        $response->assertStatus(200);
+        $rewardsData = $response->json('data');
+        // Daily reward should NOT be returned (only team is left since newbie is also excluded)
+        $this->assertCount(1, $rewardsData);
+        $this->assertEquals('team', $rewardsData[0]['category']);
+
+        // Attempting to claim daily reward should fail with 422
+        $claimResponse = $this->actingAs($this->user, 'sanctum')
+            ->postJson("/api/v1/rewards/{$this->dailyReward->id}/claim");
+        $claimResponse->assertStatus(422)
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('message', 'Daily attendance bonus is currently disabled.');
+
+        // Attempting to claim newbie reward always fails
+        $claimResponseNewbie = $this->actingAs($this->user, 'sanctum')
+            ->postJson("/api/v1/rewards/{$this->newbieReward->id}/claim");
+        $claimResponseNewbie->assertStatus(422)
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('message', 'Welcome bonus is automatically credited on registration.');
     }
 }

@@ -16,15 +16,40 @@
                        class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#FFC107] focus:ring-1 focus:ring-[#FFC107] transition-all">
             </div>
 
+            <!-- Audience -->
+            <div>
+                <label for="audience" class="block text-xs font-semibold uppercase text-gray-400 mb-2">Target Audience</label>
+                <select name="audience" id="audience" onchange="toggleAudienceFields()"
+                        class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#FFC107] focus:ring-1 focus:ring-[#FFC107] transition-all">
+                    <option value="all" class="bg-[#2b003f] text-white">Broadcast to All (Public)</option>
+                    <option value="specific" class="bg-[#2b003f] text-white">Send to Specific User</option>
+                </select>
+            </div>
+
+            <!-- Mobile Field (hidden by default) -->
+            <div id="mobile-field-group" class="hidden">
+                <label for="mobile" class="block text-xs font-semibold uppercase text-gray-400 mb-2">User Mobile Number</label>
+                <input type="text" name="mobile" id="mobile" placeholder="e.g. 9876543210"
+                       class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#FFC107] focus:ring-1 focus:ring-[#FFC107] transition-all">
+            </div>
+
             <!-- Content -->
             <div>
-                <label for="content" class="block text-xs font-semibold uppercase text-gray-400 mb-2">Announcement Message</label>
-                <textarea name="content" id="content" rows="6" required placeholder="Write details here..."
-                          class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#FFC107] focus:ring-1 focus:ring-[#FFC107] transition-all"></textarea>
+                <label for="content" class="block text-xs font-semibold uppercase text-gray-400 mb-2">Notice Message (Content)</label>
+                <textarea name="content" id="content" required placeholder="Write the announcement message content..." rows="4"
+                       class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#FFC107] focus:ring-1 focus:ring-[#FFC107] transition-all"></textarea>
+            </div>
+
+            <!-- Firebase FCM Toggle -->
+            <div class="flex items-center gap-3">
+                <label class="flex items-center text-sm font-medium cursor-pointer text-white">
+                    <input type="checkbox" name="send_push" value="1" checked class="mr-3 h-4 w-4 rounded bg-white/5 border-white/10 accent-[#C2185B]">
+                    Send Push Notification (via Firebase FCM)
+                </label>
             </div>
 
             <button type="submit" class="w-full bg-[#C2185B] hover:bg-[#d31c62] text-white py-3.5 rounded-xl font-bold transition-all border border-[#FFC107]/10 shadow-lg">
-                Broadcast Announcement
+                Send Notification
             </button>
         </form>
     </div>
@@ -48,4 +73,20 @@
         </div>
     </div>
 </div>
+
+<script>
+    function toggleAudienceFields() {
+        const aud = document.getElementById('audience').value;
+        const mobileGroup = document.getElementById('mobile-field-group');
+        const mobileInput = document.getElementById('mobile');
+        if (aud === 'specific') {
+            mobileGroup.classList.remove('hidden');
+            mobileInput.required = true;
+        } else {
+            mobileGroup.classList.add('hidden');
+            mobileInput.required = false;
+            mobileInput.value = '';
+        }
+    }
+</script>
 @endsection

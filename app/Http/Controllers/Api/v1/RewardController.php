@@ -24,7 +24,18 @@ class RewardController extends Controller
         $referralCount = User::where('referred_by', $user->id)->count();
         
         // Fetch all rewards
-        $rewards = Reward::all();
+        $welcomeEnabled = \App\Models\Setting::getValue('welcome_bonus_enabled', '1') === '1';
+        $dailyEnabled = \App\Models\Setting::getValue('daily_attendance_bonus_enabled', '1') === '1';
+
+        $rewards = Reward::all()->filter(function ($reward) use ($welcomeEnabled, $dailyEnabled) {
+            if ($reward->category === 'newbie') {
+                return false;
+            }
+            if ($reward->category === 'daily' && !$dailyEnabled) {
+                return false;
+            }
+            return true;
+        })->values();
         
         // Get claimed reward IDs
         $claimedRewardIds = UserReward::where('user_id', $user->id)
@@ -106,6 +117,22 @@ class RewardController extends Controller
         }
 
         // Check eligibility
+        if ($reward->category === 'newbie') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Welcome bonus is automatically credited on registration.',
+                'data' => (object)[]
+            ], 422);
+        }
+
+        if ($reward->category === 'daily' && \App\Models\Setting::getValue('daily_attendance_bonus_enabled', '1') === '0') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Daily attendance bonus is currently disabled.',
+                'data' => (object)[]
+            ], 422);
+        }
+
         switch ($reward->category) {
             case 'daily':
                 $dailyClaimedToday = UserReward::where('user_id', $user->id)

@@ -379,13 +379,148 @@ class AdminDashboardController extends Controller
         $request->validate([
             'title' => 'required|string|max:255',
             'content' => 'required|string',
+            'audience' => 'required|in:all,specific',
+            'mobile' => 'required_if:audience,specific|nullable|string|exists:users,mobile',
+            'send_push' => 'nullable|string',
+        ], [
+            'mobile.exists' => 'The provided user mobile number does not exist.',
+            'mobile.required_if' => 'The user mobile number is required when target is a specific user.',
         ]);
 
-        Notification::create($request->only('title', 'content'));
+        $audience = $request->input('audience');
+        $title = $request->input('title');
+        $content = $request->input('content');
+        $sendPush = $request->has('send_push');
 
-        $this->logAction('Broadcast Announcement', "Broadcasted Announcement: {$request->input('title')}");
+        $userId = null;
+        $user = null;
+        if ($audience === 'specific') {
+            $user = \App\Models\User::where('mobile', $request->input('mobile'))->firstOrFail();
+            $userId = $user->id;
+        }
 
-        return back()->with('success', 'Announcement broadcasted successfully.');
+        // 1. Create notification record in DB (nullable user_id for global, user_id for specific)
+        Notification::create([
+            'user_id' => $userId,
+            'title' => $title,
+            'content' => $content,
+        ]);
+
+        // 2. Fire Push Notification via FCM if requested
+        if ($sendPush) {
+            if ($audience === 'all') {
+                $this->sendFcmMessage('topic', 'all', $title, $content);
+            } else {
+                if ($user && !empty($user->fcm_token)) {
+                    $this->sendFcmMessage('token', $user->fcm_token, $title, $content);
+                } else {
+                    \Illuminate\Support\Facades\Log::warning("FCM warning: User has no registered FCM token.");
+                }
+            }
+        }
+
+        $this->logAction('Broadcast Announcement', "Sent Announcement: {$title} to " . ($audience === 'all' ? 'All' : 'User ' . $request->input('mobile')));
+
+        return back()->with('success', 'Announcement sent successfully.');
+    }
+
+    private function sendFcmMessage(string $targetKey, string $targetValue, string $title, string $body)
+    {
+        $serviceAccountJson = Setting::getValue('firebase_service_account_json', '');
+        if (empty($serviceAccountJson)) {
+            \Illuminate\Support\Facades\Log::warning("FCM failed: firebase_service_account_json is not configured in settings.");
+            return false;
+        }
+
+        $serviceAccount = json_decode($serviceAccountJson, true);
+        if (!$serviceAccount || !isset($serviceAccount['private_key']) || !isset($serviceAccount['client_email']) || !isset($serviceAccount['project_id'])) {
+            \Illuminate\Support\Facades\Log::warning("FCM failed: firebase_service_account_json is invalid.");
+            return false;
+        }
+
+        $accessToken = $this->getGoogleAccessToken($serviceAccount);
+        if (!$accessToken) {
+            \Illuminate\Support\Facades\Log::warning("FCM failed: Could not retrieve Google OAuth access token.");
+            return false;
+        }
+
+        $projectId = $serviceAccount['project_id'];
+        $url = "https://fcm.googleapis.com/v1/projects/{$projectId}/messages:send";
+
+        $message = [
+            'message' => [
+                $targetKey => $targetValue,
+                'notification' => [
+                    'title' => $title,
+                    'body' => $body,
+                ]
+            ]
+        ];
+
+        try {
+            $response = \Illuminate\Support\Facades\Http::withHeaders([
+                'Authorization' => 'Bearer ' . $accessToken,
+                'Content-Type' => 'application/json',
+            ])->post($url, $message);
+
+            if ($response->successful()) {
+                \Illuminate\Support\Facades\Log::info("FCM message sent successfully to {$targetKey} = {$targetValue}.");
+                return true;
+            } else {
+                \Illuminate\Support\Facades\Log::error("FCM message sending failed: " . $response->body());
+                return false;
+            }
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("FCM message sending encountered error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    private function getGoogleAccessToken($serviceAccount)
+    {
+        $privateKey = $serviceAccount['private_key'];
+        $clientEmail = $serviceAccount['client_email'];
+
+        $header = json_encode(['alg' => 'RS256', 'typ' => 'JWT']);
+        $now = time();
+        $payload = json_encode([
+            'iss' => $clientEmail,
+            'scope' => 'https://www.googleapis.com/auth/firebase.messaging',
+            'aud' => 'https://oauth2.googleapis.com/token',
+            'iat' => $now,
+            'exp' => $now + 3600,
+        ]);
+
+        $base64UrlHeader = rtrim(strtr(base64_encode($header), '+/', '-_'), '=');
+        $base64UrlPayload = rtrim(strtr(base64_encode($payload), '+/', '-_'), '=');
+
+        $signatureInput = $base64UrlHeader . "." . $base64UrlPayload;
+        $signature = '';
+
+        if (!openssl_sign($signatureInput, $signature, $privateKey, OPENSSL_ALGO_SHA256)) {
+            \Illuminate\Support\Facades\Log::error("openssl_sign failed for Google Auth JWT");
+            return null;
+        }
+
+        $base64UrlSignature = rtrim(strtr(base64_encode($signature), '+/', '-_'), '=');
+        $jwt = $signatureInput . "." . $base64UrlSignature;
+
+        try {
+            $response = \Illuminate\Support\Facades\Http::asForm()->post('https://oauth2.googleapis.com/token', [
+                'grant_type' => 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                'assertion' => $jwt,
+            ]);
+
+            if ($response->successful()) {
+                return $response->json('access_token');
+            } else {
+                \Illuminate\Support\Facades\Log::error("Google OAuth token fetch failed: " . $response->body());
+                return null;
+            }
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("Google OAuth token fetch failed with exception: " . $e->getMessage());
+            return null;
+        }
     }
 
     /**
@@ -401,6 +536,9 @@ class AdminDashboardController extends Controller
             'paytm_mid' => $paytmToken ? $paytmToken->mid : '',
             'upi_id' => Setting::getValue('upi_id', ''),
             'upi_name' => Setting::getValue('upi_name', ''),
+            'manual_upi_ids' => Setting::getValue('manual_upi_ids', ''),
+            'gateway_upi_qr_enabled' => Setting::getValue('gateway_upi_qr_enabled', '1'),
+            'gateway_manual_qr_enabled' => Setting::getValue('gateway_manual_qr_enabled', '1'),
             
             // New configurations
             'website_name' => Setting::getValue('website_name', 'Chetak Pay'),
@@ -417,6 +555,8 @@ class AdminDashboardController extends Controller
             'otp_sender_id' => Setting::getValue('otp_sender_id', 'FOTPSM'),
             'feature_referrals' => Setting::getValue('feature_referrals', '1'),
             'feature_rewards' => Setting::getValue('feature_rewards', '1'),
+            'welcome_bonus_enabled' => Setting::getValue('welcome_bonus_enabled', '1'),
+            'daily_attendance_bonus_enabled' => Setting::getValue('daily_attendance_bonus_enabled', '1'),
             'app_version' => Setting::getValue('app_version', '1.0.0'),
             'app_update_url' => Setting::getValue('app_update_url', ''),
             'app_force_update' => Setting::getValue('app_force_update', '0'),
@@ -429,6 +569,7 @@ class AdminDashboardController extends Controller
             'welcome_bonus_amount' => Setting::getValue('welcome_bonus_amount', '50.00'),
             'daily_attendance_bonus_amount' => Setting::getValue('daily_attendance_bonus_amount', '5.00'),
             'referral_commission_percentage' => Setting::getValue('referral_commission_percentage', '10.0'),
+            'firebase_service_account_json' => Setting::getValue('firebase_service_account_json', ''),
         ];
 
         return view('admin.settings', compact('settings'));
@@ -444,6 +585,7 @@ class AdminDashboardController extends Controller
             'upi_id' => 'nullable|string',
             'upi_name' => 'nullable|string',
             'paytm_mid' => 'nullable|string',
+            'manual_upi_ids' => 'nullable|string',
             
             // New settings validations
             'website_name' => 'required|string|max:255',
@@ -468,12 +610,14 @@ class AdminDashboardController extends Controller
             'welcome_bonus_amount' => 'required|numeric|min:0',
             'daily_attendance_bonus_amount' => 'required|numeric|min:0',
             'referral_commission_percentage' => 'required|numeric|min:0|max:100',
+            'firebase_service_account_json' => 'nullable|string',
         ]);
 
         $keys = [
             'active_gateway',
             'upi_id',
             'upi_name',
+            'manual_upi_ids',
             'website_name',
             'website_logo',
             'support_contact',
@@ -496,6 +640,7 @@ class AdminDashboardController extends Controller
             'welcome_bonus_amount',
             'daily_attendance_bonus_amount',
             'referral_commission_percentage',
+            'firebase_service_account_json',
         ];
 
         foreach ($keys as $key) {
@@ -519,6 +664,10 @@ class AdminDashboardController extends Controller
         // Handle checkboxes/toggles
         Setting::setValue('feature_referrals', $request->has('feature_referrals') ? '1' : '0');
         Setting::setValue('feature_rewards', $request->has('feature_rewards') ? '1' : '0');
+        Setting::setValue('welcome_bonus_enabled', $request->has('welcome_bonus_enabled') ? '1' : '0');
+        Setting::setValue('daily_attendance_bonus_enabled', $request->has('daily_attendance_bonus_enabled') ? '1' : '0');
+        Setting::setValue('gateway_upi_qr_enabled', $request->has('gateway_upi_qr_enabled') ? '1' : '0');
+        Setting::setValue('gateway_manual_qr_enabled', $request->has('gateway_manual_qr_enabled') ? '1' : '0');
         Setting::setValue('app_force_update', $request->has('app_force_update') ? '1' : '0');
         Setting::setValue('maintenance_mode', $request->has('maintenance_mode') ? '1' : '0');
 

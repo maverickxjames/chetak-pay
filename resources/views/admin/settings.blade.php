@@ -18,6 +18,9 @@
         <button type="button" onclick="switchTab('app')" id="tab-btn-app" class="flex-shrink-0 sm:flex-1 py-2.5 px-4 sm:px-0 text-sm font-semibold rounded-lg text-gray-400 hover:text-white transition-all whitespace-nowrap">
             App Release & Maintenance
         </button>
+        <button type="button" onclick="switchTab('firebase')" id="tab-btn-firebase" class="flex-shrink-0 sm:flex-1 py-2.5 px-4 sm:px-0 text-sm font-semibold rounded-lg text-gray-400 hover:text-white transition-all whitespace-nowrap">
+            Firebase Config
+        </button>
     </div>
 
     <!-- Configuration Form -->
@@ -38,16 +41,31 @@
                 <p class="text-xs text-gray-500 mt-2">Specify which checkout flow is exposed to the Android mobile app.</p>
             </div>
 
+            <div>
+                <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Enable/Disable Gateways</label>
+                <div class="flex flex-col gap-3 mt-1">
+                    <label class="flex items-center text-sm font-medium cursor-pointer text-white">
+                        <input type="checkbox" name="gateway_upi_qr_enabled" value="1" {{ $settings['gateway_upi_qr_enabled'] === '1' ? 'checked' : '' }} class="mr-3 h-4 w-4 rounded bg-white/5 border-white/10 accent-[#C2185B]">
+                        Enable Paytm Auto Gateway (UPI QR Intent)
+                    </label>
+                    <label class="flex items-center text-sm font-medium cursor-pointer text-white">
+                        <input type="checkbox" name="gateway_manual_qr_enabled" value="1" {{ $settings['gateway_manual_qr_enabled'] === '1' ? 'checked' : '' }} class="mr-3 h-4 w-4 rounded bg-white/5 border-white/10 accent-[#C2185B]">
+                        Enable Manual QR Gateway (UTR Verification)
+                    </label>
+                </div>
+            </div>
+
             <hr class="border-white/10">
 
             <!-- UPI ID & Name -->
             <div class="space-y-4">
-                <h4 class="text-sm font-bold text-[#FFC107]">UPI / QR Payout Credentials</h4>
+                <h4 class="text-sm font-bold text-[#FFC107]">Paytm Merchant Credentials (Auto Gateway)</h4>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
-                        <label for="upi_id" class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Merchant UPI ID</label>
+                        <label for="upi_id" class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Paytm Merchant UPI ID</label>
                         <input type="text" name="upi_id" id="upi_id" value="{{ $settings['upi_id'] }}" placeholder="merchant@okaxis"
                                class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#FFC107] focus:ring-1 focus:ring-[#FFC107] transition-all">
+                        <p class="text-[10px] text-gray-500 mt-1">UPI ID linked to your Paytm Merchant MID.</p>
                     </div>
                     <div>
                         <label for="upi_name" class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Merchant Name</label>
@@ -59,6 +77,18 @@
                         <input type="text" name="paytm_mid" id="paytm_mid" value="{{ $settings['paytm_mid'] }}" placeholder="MID_DEFAULT_TEST_123"
                                class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#FFC107] focus:ring-1 focus:ring-[#FFC107] transition-all">
                     </div>
+                </div>
+            </div>
+
+            <hr class="border-white/10">
+
+            <div class="space-y-4">
+                <h4 class="text-sm font-bold text-[#FFC107]">Manual QR Credentials (UTR Verification Gateway)</h4>
+                <div>
+                    <label for="manual_upi_ids" class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Manual UPI ID(s) (Comma-separated)</label>
+                    <input type="text" name="manual_upi_ids" id="manual_upi_ids" value="{{ $settings['manual_upi_ids'] }}" placeholder="manual1@okaxis, manual2@okaxis, manual3@okaxis"
+                           class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#FFC107] focus:ring-1 focus:ring-[#FFC107] transition-all">
+                    <p class="text-[10px] text-gray-500 mt-2">Enter multiple UPI IDs separated by commas. The system will randomly choose one of these UPI IDs for manual payment orders. If left empty, it will fall back to the Paytm Merchant UPI ID above.</p>
                 </div>
             </div>
 
@@ -211,6 +241,14 @@
                         <input type="checkbox" name="feature_rewards" value="1" {{ $settings['feature_rewards'] === '1' ? 'checked' : '' }} class="mr-3 h-4 w-4 rounded bg-white/5 border-white/10 accent-[#C2185B]">
                         Enable Rewards Claiming Tab (Milestones & Daily Check-ins)
                     </label>
+                    <label class="flex items-center text-sm font-medium cursor-pointer text-white">
+                        <input type="checkbox" name="welcome_bonus_enabled" value="1" {{ $settings['welcome_bonus_enabled'] === '1' ? 'checked' : '' }} class="mr-3 h-4 w-4 rounded bg-white/5 border-white/10 accent-[#C2185B]">
+                        Enable Welcome Bonus (Phone verification credit)
+                    </label>
+                    <label class="flex items-center text-sm font-medium cursor-pointer text-white">
+                        <input type="checkbox" name="daily_attendance_bonus_enabled" value="1" {{ $settings['daily_attendance_bonus_enabled'] === '1' ? 'checked' : '' }} class="mr-3 h-4 w-4 rounded bg-white/5 border-white/10 accent-[#C2185B]">
+                        Enable Daily Attendance Bonus (Daily check-in credit)
+                    </label>
                 </div>
             </div>
         </div>
@@ -284,6 +322,21 @@
             </div>
         </div>
 
+        <!-- Tab 5: Firebase Config -->
+        <div id="tab-content-firebase" class="glass-card rounded-2xl p-6 space-y-6 hidden">
+            <h3 class="text-xl font-bold text-white mb-2">Firebase Cloud Messaging Settings</h3>
+            <p class="text-xs text-gray-400">Configure your Google Firebase Service Account credential JSON for push notifications.</p>
+            
+            <div class="space-y-4">
+                <div>
+                    <label for="firebase_service_account_json" class="block text-xs font-semibold uppercase text-gray-400 mb-2">Service Account credentials JSON</label>
+                    <textarea name="firebase_service_account_json" id="firebase_service_account_json" rows="12" placeholder='{ "type": "service_account", "project_id": ... }'
+                              class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white font-mono text-xs focus:outline-none focus:border-[#FFC107] focus:ring-1 focus:ring-[#FFC107] transition-all">{{ $settings['firebase_service_account_json'] }}</textarea>
+                    <p class="text-[10px] text-gray-500 mt-1">Copy and paste the entire content of the downloaded JSON credentials file from Firebase Console (Project Settings -> Service Accounts -> Generate new private key).</p>
+                </div>
+            </div>
+        </div>
+
         <!-- Submit Panel -->
         <div class="pt-4">
             <button type="submit"
@@ -301,9 +354,10 @@
         document.getElementById('tab-content-general').classList.add('hidden');
         document.getElementById('tab-content-legal').classList.add('hidden');
         document.getElementById('tab-content-app').classList.add('hidden');
+        document.getElementById('tab-content-firebase').classList.add('hidden');
 
         // Deactivate all buttons styling
-        const buttons = ['gateway', 'general', 'legal', 'app'];
+        const buttons = ['gateway', 'general', 'legal', 'app', 'firebase'];
         buttons.forEach(btn => {
             const el = document.getElementById('tab-btn-' + btn);
             el.className = "flex-shrink-0 sm:flex-1 py-2.5 px-4 sm:px-0 text-sm font-semibold rounded-lg text-gray-400 hover:text-white transition-all whitespace-nowrap";

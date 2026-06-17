@@ -199,11 +199,46 @@ class AuthController extends Controller
         }
         $user->save();
 
+        // Automatically credit welcome bonus on account creation if enabled
+        if (\App\Models\Setting::getValue('welcome_bonus_enabled', '1') === '1') {
+            $alreadyCredited = \App\Models\Transaction::where('user_id', $user->id)
+                ->where('type', 'incentive')
+                ->where('description', 'Welcome Bonus')
+                ->exists();
+                
+            if (!$alreadyCredited) {
+                $welcomeAmount = floatval(\App\Models\Setting::getValue('welcome_bonus_amount', '50.00'));
+                $welcomeReward = \App\Models\Reward::where('category', 'newbie')->first();
+                
+                \Illuminate\Support\Facades\DB::transaction(function () use ($user, $welcomeReward, $welcomeAmount) {
+                    if ($welcomeReward) {
+                        \App\Models\UserReward::create([
+                            'user_id' => $user->id,
+                            'reward_id' => $welcomeReward->id,
+                            'claimed_at' => \Illuminate\Support\Carbon::now()
+                        ]);
+                    }
+                    
+                    $user->wallet_balance += $welcomeAmount;
+                    $user->total_commission += $welcomeAmount;
+                    $user->save();
+                    
+                    \App\Models\Transaction::create([
+                        'user_id' => $user->id,
+                        'type' => 'incentive',
+                        'amount' => $welcomeAmount,
+                        'status' => 'completed',
+                        'description' => 'Welcome Bonus'
+                    ]);
+                });
+            }
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Registration completed successfully.',
             'data' => [
-                'user' => $user
+                'user' => $user->fresh()
             ]
         ]);
     }
@@ -423,6 +458,41 @@ class AuthController extends Controller
             }
         }
         $user->save();
+
+        // Automatically credit welcome bonus on account creation if enabled
+        if (\App\Models\Setting::getValue('welcome_bonus_enabled', '1') === '1') {
+            $alreadyCredited = \App\Models\Transaction::where('user_id', $user->id)
+                ->where('type', 'incentive')
+                ->where('description', 'Welcome Bonus')
+                ->exists();
+                
+            if (!$alreadyCredited) {
+                $welcomeAmount = floatval(\App\Models\Setting::getValue('welcome_bonus_amount', '50.00'));
+                $welcomeReward = \App\Models\Reward::where('category', 'newbie')->first();
+                
+                \Illuminate\Support\Facades\DB::transaction(function () use ($user, $welcomeReward, $welcomeAmount) {
+                    if ($welcomeReward) {
+                        \App\Models\UserReward::create([
+                            'user_id' => $user->id,
+                            'reward_id' => $welcomeReward->id,
+                            'claimed_at' => \Illuminate\Support\Carbon::now()
+                        ]);
+                    }
+                    
+                    $user->wallet_balance += $welcomeAmount;
+                    $user->total_commission += $welcomeAmount;
+                    $user->save();
+                    
+                    \App\Models\Transaction::create([
+                        'user_id' => $user->id,
+                        'type' => 'incentive',
+                        'amount' => $welcomeAmount,
+                        'status' => 'completed',
+                        'description' => 'Welcome Bonus'
+                    ]);
+                });
+            }
+        }
  
         // Create Sanctum Token
         $token = $user->createToken('auth_token')->plainTextToken;
@@ -433,7 +503,7 @@ class AuthController extends Controller
             'data' => [
                 'token' => $token,
                 'is_new_user' => false,
-                'user' => $user
+                'user' => $user->fresh()
             ]
         ]);
     }

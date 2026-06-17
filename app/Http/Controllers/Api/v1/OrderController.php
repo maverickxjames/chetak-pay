@@ -64,9 +64,38 @@ class OrderController extends Controller
             ], 422);
         }
 
+        if ($request->payment_method === 'upi_qr' && \App\Models\Setting::getValue('gateway_upi_qr_enabled', '1') !== '1') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Paytm Auto Gateway is currently disabled.',
+                'data' => null
+            ], 422);
+        }
+
+        if ($request->payment_method === 'manual_qr' && \App\Models\Setting::getValue('gateway_manual_qr_enabled', '1') !== '1') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Manual QR Gateway is currently disabled.',
+                'data' => null
+            ], 422);
+        }
+
         // Generate unique order ID
-        $orderId = 'ORD' . time() . str_pad($user->id, 4, '0', STR_PAD_LEFT);
-        $upiId = \App\Models\Setting::getValue('upi_id', 'chetakpay@okaxis');
+        $orderId = 'ORD' . time() . rand(1000, 9999) . str_pad($user->id, 4, '0', STR_PAD_LEFT);
+        
+        // Retrieve appropriate UPI ID based on payment gateway method
+        if ($request->payment_method === 'manual_qr') {
+            $upiSetting = \App\Models\Setting::getValue('manual_upi_ids', '');
+            if (empty(trim($upiSetting))) {
+                $upiSetting = \App\Models\Setting::getValue('upi_id', 'chetakpay@okaxis');
+            }
+            $upiList = array_filter(array_map('trim', explode(',', $upiSetting)));
+            $upiId = !empty($upiList) ? $upiList[array_rand($upiList)] : 'chetakpay@okaxis';
+        } else {
+            // upi_qr Paytm Merchant gateway uses the single configured Paytm UPI ID
+            $upiId = \App\Models\Setting::getValue('upi_id', 'chetakpay@okaxis');
+        }
+        
         $byteTxId = 'TXN' . time() . rand(1000, 9999);
 
         $order = Order::create([
@@ -81,29 +110,28 @@ class OrderController extends Controller
             'byteTransactionId' => $byteTxId,
         ]);
 
+        $name = \App\Models\Setting::getValue('upi_name', 'Chetak Pay Admin');
+        $upiString = "upi://pay?pa={$upiId}&pn=" . urlencode($name) . "&am={$plan->amount}&cu=INR&tn=" . urlencode("Payment for Order {$orderId}") . ($byteTxId ? "&tid={$byteTxId}&tr={$byteTxId}" : "");
+        $qrUrl = "https://api.qrserver.com/v1/create-qr-code/?data=" . urlencode($upiString) . "&size=200x200";
+
         $paymentData = [
             'order_id' => $orderId,
             'amount' => $plan->amount,
             'currency' => 'INR',
+            'share_url' => str_replace('http://', 'https://', url("/pay/{$orderId}")),
+            'paytm' => "paytmmp://cash_wallet?pa={$upiId}&pn=" . urlencode($name) . "&am={$plan->amount}&cu=INR&tn=" . urlencode("Payment for Order {$orderId}") . ($byteTxId ? "&tid={$byteTxId}&tr={$byteTxId}" : ""),
+            'gpay' => "tez://upi/pay?pa={$upiId}&pn=" . urlencode($name) . "&am={$plan->amount}&cu=INR&tn=" . urlencode("Payment for Order {$orderId}") . ($byteTxId ? "&tid={$byteTxId}&tr={$byteTxId}" : ""),
+            'phonepe' => "phonepe://pay?pa={$upiId}&pn=" . urlencode($name) . "&am={$plan->amount}&cu=INR&tn=" . urlencode("Payment for Order {$orderId}") . ($byteTxId ? "&tid={$byteTxId}&tr={$byteTxId}" : ""),
+            'cred' => "credpay://upi/pay?pa={$upiId}&pn=" . urlencode($name) . "&am={$plan->amount}&cu=INR&tn=" . urlencode("Payment for Order {$orderId}") . ($byteTxId ? "&tid={$byteTxId}&tr={$byteTxId}" : ""),
+            'upi' => $upiString,
+            'qr' => $qrUrl,
+            'upi_id' => $upiId,
+            'upi_name' => $name,
         ];
 
         if ($request->payment_method === 'upi_qr') {
-            $paytm = "paytmmp://cash_wallet?pa={$upiId}&am={$plan->amount}&tn=Payment%20for%20Order%20{$orderId}&tid={$byteTxId}&tr={$byteTxId}&cu=INR&mc=4722&featuretype=money_transfer";
-            $gpay = "share://";
-            $cred = "credpay://upi/pay?pa={$upiId}&am={$plan->amount}&tn=Payment%20for%20Order%20{$orderId}&tid={$byteTxId}&tr={$byteTxId}&cu=INR&mc=4722&featuretype=money_transfer";
-            $upiString = "upi://pay?pa={$upiId}&pn=Merchant&am={$plan->amount}&cu=INR&tn=Payment%20for%20Order%20{$orderId}&tid={$byteTxId}&tr={$byteTxId}&mc=0000&mode=22";
-            $qrUrl = "https://api.qrserver.com/v1/create-qr-code/?data=" . urlencode($upiString) . "&size=200x200";
-
-            $paymentData['paytm'] = $paytm;
-            $paymentData['gpay'] = $gpay;
-            $paymentData['cred'] = $cred;
-            $paymentData['upi'] = $upiString;
-            $paymentData['qr'] = $qrUrl;
             $paymentData['byteTransactionId'] = $byteTxId;
         } elseif ($request->payment_method === 'manual_qr') {
-            $name = \App\Models\Setting::getValue('upi_name', 'Chetak Pay Admin');
-            $paymentData['upi_id'] = $upiId;
-            $paymentData['upi_name'] = $name;
             $paymentData['remark'] = $orderId;
         }
 

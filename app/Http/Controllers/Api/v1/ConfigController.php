@@ -21,6 +21,8 @@ class ConfigController extends Controller
                 'support_contact' => Setting::getValue('support_contact', 'support@chetakpay.com'),
                 'feature_referrals' => Setting::getValue('feature_referrals', '1') === '1',
                 'feature_rewards' => Setting::getValue('feature_rewards', '1') === '1',
+                'welcome_bonus_enabled' => Setting::getValue('welcome_bonus_enabled', '1') === '1',
+                'daily_attendance_bonus_enabled' => Setting::getValue('daily_attendance_bonus_enabled', '1') === '1',
                 'app_version' => Setting::getValue('app_version', '1.0.0'),
                 'app_update_url' => Setting::getValue('app_update_url', ''),
                 'app_force_update' => Setting::getValue('app_force_update', '0') === '1',
@@ -31,6 +33,8 @@ class ConfigController extends Controller
                 'terms_conditions' => Setting::getValue('terms_conditions', ''),
                 'commission_percentage' => (double) Setting::getValue('commission_percentage', '3.8'),
                 'default_gateway' => Setting::getValue('active_gateway', 'upi_qr'),
+                'gateway_upi_qr_enabled' => Setting::getValue('gateway_upi_qr_enabled', '1') === '1',
+                'gateway_manual_qr_enabled' => Setting::getValue('gateway_manual_qr_enabled', '1') === '1',
             ]
         ]);
     }

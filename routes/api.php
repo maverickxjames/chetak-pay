@@ -25,6 +25,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/profile', [AuthController::class, 'profile']);
         Route::post('/logout', [AuthController::class, 'logout']);
         Route::post('/profile/fcm-token', [AuthController::class, 'updateFcmToken']);
+        Route::post('/profile/payout-details', [AuthController::class, 'updatePayoutDetails']);
         
         // Phase 3 endpoints
         Route::get('/rewards', [RewardController::class, 'index']);

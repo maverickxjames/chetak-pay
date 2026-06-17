@@ -539,6 +539,8 @@ class AdminDashboardController extends Controller
             'manual_upi_ids' => Setting::getValue('manual_upi_ids', ''),
             'gateway_upi_qr_enabled' => Setting::getValue('gateway_upi_qr_enabled', '1'),
             'gateway_manual_qr_enabled' => Setting::getValue('gateway_manual_qr_enabled', '1'),
+            'gateway_upi_qr_name' => Setting::getValue('gateway_upi_qr_name', 'Paytm Auto Gateway'),
+            'gateway_manual_qr_name' => Setting::getValue('gateway_manual_qr_name', 'Manual QR Gateway'),
             
             // New configurations
             'website_name' => Setting::getValue('website_name', 'Chetak Pay'),
@@ -586,6 +588,8 @@ class AdminDashboardController extends Controller
             'upi_name' => 'nullable|string',
             'paytm_mid' => 'nullable|string',
             'manual_upi_ids' => 'nullable|string',
+            'gateway_upi_qr_name' => 'nullable|string|max:255',
+            'gateway_manual_qr_name' => 'nullable|string|max:255',
             
             // New settings validations
             'website_name' => 'required|string|max:255',
@@ -618,6 +622,8 @@ class AdminDashboardController extends Controller
             'upi_id',
             'upi_name',
             'manual_upi_ids',
+            'gateway_upi_qr_name',
+            'gateway_manual_qr_name',
             'website_name',
             'website_logo',
             'support_contact',

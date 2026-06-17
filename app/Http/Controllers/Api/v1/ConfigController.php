@@ -35,6 +35,8 @@ class ConfigController extends Controller
                 'default_gateway' => Setting::getValue('active_gateway', 'upi_qr'),
                 'gateway_upi_qr_enabled' => Setting::getValue('gateway_upi_qr_enabled', '1') === '1',
                 'gateway_manual_qr_enabled' => Setting::getValue('gateway_manual_qr_enabled', '1') === '1',
+                'gateway_upi_qr_name' => Setting::getValue('gateway_upi_qr_name', 'Paytm Auto Gateway'),
+                'gateway_manual_qr_name' => Setting::getValue('gateway_manual_qr_name', 'Manual QR Gateway'),
             ]
         ]);
     }

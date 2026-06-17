@@ -43,6 +43,17 @@
                             <span class="font-bold text-white block">{{ $u->name ?? 'User' }}</span>
                             <span class="text-xs text-gray-400 block">{{ $u->mobile }}</span>
                             <span class="text-xs text-gray-400 block">{{ $u->email }}</span>
+                            @if($u->upi_id || $u->account_number)
+                                <div class="mt-1.5 pt-1.5 border-t border-white/5 space-y-0.5">
+                                    @if($u->upi_id)
+                                        <span class="text-[10px] text-yellow-400 block font-mono">UPI: {{ $u->upi_id }}</span>
+                                    @endif
+                                    @if($u->account_number)
+                                        <span class="text-[10px] text-blue-400 block font-mono">Bank: {{ $u->bank_name }} ({{ $u->account_holder_name }})</span>
+                                        <span class="text-[10px] text-blue-400 block font-mono">A/C: {{ $u->account_number }} | IFSC: {{ $u->ifsc_code }}</span>
+                                    @endif
+                                </div>
+                            @endif
                         </td>
                         <td class="py-4 text-center">
                             <span class="px-2.5 py-1 text-xs rounded bg-purpleGradStart border border-[#FFC107]/20 text-[#FFC107] font-bold">
@@ -63,7 +74,7 @@
                                     class="px-3 py-1.5 text-xs font-semibold bg-[#FFC107] text-black hover:bg-[#ffd54f] rounded-lg transition-colors">
                                 Adjust
                             </button>
-                            <button onclick="openWithdrawModal({{ $u->id }}, '{{ $u->name ?? $u->mobile }}', '{{ $u->wallet_balance }}')" 
+                            <button onclick="openWithdrawModal({{ $u->id }}, '{{ $u->name ?? $u->mobile }}', '{{ $u->wallet_balance }}', '{{ $u->upi_id }}', '{{ $u->bank_name }}', '{{ $u->account_number }}', '{{ $u->ifsc_code }}', '{{ $u->account_holder_name }}')" 
                                     class="px-3 py-1.5 text-xs font-semibold bg-orangeAccent text-white hover:bg-orange-600 rounded-lg transition-colors">
                                 Withdraw
                             </button>
@@ -147,6 +158,12 @@
         
         <form id="withdrawForm" method="POST" action="" class="space-y-4">
             @csrf
+            <!-- Payout Details Display -->
+            <div class="mb-4">
+                <label class="block text-xs font-semibold uppercase text-gray-400 mb-2">User Payout Details</label>
+                <div id="withdrawPayoutDetails"></div>
+            </div>
+
             <!-- Amount Input -->
             <div>
                 <label class="block text-xs font-semibold uppercase text-gray-400 mb-2">Withdrawal Amount (₹)</label>
@@ -156,8 +173,8 @@
 
             <!-- Message Description -->
             <div>
-                <label class="block text-xs font-semibold uppercase text-gray-400 mb-2">Withdrawal Message / Reason</label>
-                <input type="text" name="message" required placeholder="Reason (e.g. Requested Bank Transfer payout)"
+                <label class="block text-xs font-semibold uppercase text-gray-400 mb-2">Withdrawal Message / Reason (UTR Reference)</label>
+                <input type="text" name="message" required placeholder="Reason (e.g. UTR 987654321012 via Bank Transfer)"
                        class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#FFC107] focus:ring-1 focus:ring-[#FFC107] transition-all">
             </div>
 
@@ -185,11 +202,30 @@
         document.getElementById('adjustModal').classList.add('hidden');
     }
 
-    function openWithdrawModal(userId, name, currentBalance) {
+    function openWithdrawModal(userId, name, currentBalance, upi, bankName, acct, ifsc, holder) {
         document.getElementById('withdrawModalUsername').innerText = name;
         document.getElementById('withdrawModalBalance').innerText = parseFloat(currentBalance).toFixed(2);
         document.getElementById('withdrawAmount').max = parseFloat(currentBalance);
         document.getElementById('withdrawForm').action = "/admin/users/" + userId + "/admin-withdraw";
+
+        // Populate payout details in modal
+        let detailsHtml = "";
+        if (upi) {
+            detailsHtml += `<div class="p-2.5 bg-yellow-500/10 border border-yellow-500/20 rounded-xl text-yellow-300 text-xs font-mono mb-2"><strong>UPI ID:</strong> ${upi}</div>`;
+        }
+        if (acct) {
+            detailsHtml += `<div class="p-2.5 bg-blue-500/10 border border-blue-500/20 rounded-xl text-blue-300 text-xs font-mono">
+                <strong>Bank Name:</strong> ${bankName}<br>
+                <strong>Holder:</strong> ${holder}<br>
+                <strong>A/C Number:</strong> ${acct}<br>
+                <strong>IFSC Code:</strong> ${ifsc}
+            </div>`;
+        }
+        if (!upi && !acct) {
+            detailsHtml = `<div class="p-2.5 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-xs">No payout details added by user.</div>`;
+        }
+        document.getElementById('withdrawPayoutDetails').innerHTML = detailsHtml;
+
         document.getElementById('withdrawModal').classList.remove('hidden');
     }
 

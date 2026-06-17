@@ -598,4 +598,122 @@ class AuthController extends Controller
             'data' => (object)[]
         ]);
     }
+
+    /**
+     * Update the authenticated user's payout details (Bank and/or UPI ID).
+     */
+    public function updatePayoutDetails(Request $request)
+    {
+        $user = $request->user();
+
+        $request->validate([
+            'bank_name' => 'nullable|string|max:255',
+            'account_number' => 'nullable|string|max:255',
+            'ifsc_code' => 'nullable|string|max:255',
+            'account_holder_name' => 'nullable|string|max:255',
+            'upi_id' => 'nullable|string|max:255',
+        ]);
+
+        $bankAdded = !empty($user->account_number);
+        $upiAdded = !empty($user->upi_id);
+
+        $wantsToAddBank = $request->filled('account_number') || $request->filled('ifsc_code');
+        $wantsToAddUpi = $request->filled('upi_id');
+
+        if ($wantsToAddBank && $bankAdded) {
+            if ($user->account_number !== $request->input('account_number') ||
+                $user->ifsc_code !== $request->input('ifsc_code') ||
+                $user->account_holder_name !== $request->input('account_holder_name')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Bank details are already added. Contact support to update them.',
+                    'data' => (object)[]
+                ], 422);
+            }
+        }
+
+        if ($wantsToAddUpi && $upiAdded) {
+            if ($user->upi_id !== $request->input('upi_id')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'UPI ID is already added. Contact support to update it.',
+                    'data' => (object)[]
+                ], 422);
+            }
+        }
+
+        if ($wantsToAddBank && !$bankAdded) {
+            $ifsc = strtoupper(trim($request->input('ifsc_code')));
+            
+            if (empty($ifsc) || strlen($ifsc) !== 11) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Please enter a valid 11-digit IFSC code.',
+                    'data' => (object)[]
+                ], 422);
+            }
+            
+            try {
+                $response = \Illuminate\Support\Facades\Http::get("https://ifsc.razorpay.com/" . $ifsc);
+                if (!$response->successful() || trim($response->body()) === 'Not Found') {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Invalid IFSC Code. Please check and try again.',
+                        'data' => (object)[]
+                    ], 422);
+                }
+                
+                $ifscData = $response->json();
+                $bankName = $ifscData['BANK'] ?? null;
+                
+                if (empty($bankName)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Could not determine bank name from the provided IFSC.',
+                        'data' => (object)[]
+                    ], 422);
+                }
+                
+                $user->bank_name = $bankName;
+                $user->account_number = $request->input('account_number');
+                $user->ifsc_code = $ifsc;
+                $user->account_holder_name = $request->input('account_holder_name');
+            } catch (\Exception $e) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to verify IFSC code: ' . $e->getMessage(),
+                    'data' => (object)[]
+                ], 422);
+            }
+        }
+
+        if ($wantsToAddUpi && !$upiAdded) {
+            $user->upi_id = $request->input('upi_id');
+        }
+
+        $user->save();
+
+        $activeOrders = Order::where('user_id', $user->id)
+            ->where('status', 'active')
+            ->get();
+            
+        $activePlansCount = $activeOrders->count();
+        $totalActiveInvested = $activeOrders->sum('amount');
+        
+        $recentTransactions = Transaction::where('user_id', $user->id)
+            ->orderBy('created_at', 'desc')
+            ->take(5)
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Payout details updated successfully.',
+            'data' => [
+                'user' => $user,
+                'active_plans_count' => $activePlansCount,
+                'total_active_invested' => number_format($totalActiveInvested, 2, '.', ''),
+                'recent_transactions' => $recentTransactions
+            ]
+        ]);
+    }
 }

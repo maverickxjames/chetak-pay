@@ -37,6 +37,11 @@ class User extends Authenticatable
         'total_investment',
         'total_commission',
         'total_withdrawn',
+        'bank_name',
+        'account_number',
+        'ifsc_code',
+        'account_holder_name',
+        'upi_id',
     ];
 
     /**

@@ -31,6 +31,19 @@
         <div id="tab-content-gateway" class="glass-card rounded-2xl p-6 space-y-6">
             <h3 class="text-lg font-bold text-white mb-4">Payment Settings</h3>
             
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label for="gateway_upi_qr_name" class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Paytm Auto Gateway Display Name</label>
+                    <input type="text" name="gateway_upi_qr_name" id="gateway_upi_qr_name" value="{{ $settings['gateway_upi_qr_name'] }}" placeholder="Paytm Auto Gateway"
+                           class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#FFC107] focus:ring-1 focus:ring-[#FFC107] transition-all">
+                </div>
+                <div>
+                    <label for="gateway_manual_qr_name" class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Manual QR Gateway Display Name</label>
+                    <input type="text" name="gateway_manual_qr_name" id="gateway_manual_qr_name" value="{{ $settings['gateway_manual_qr_name'] }}" placeholder="Manual QR Gateway"
+                           class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#FFC107] focus:ring-1 focus:ring-[#FFC107] transition-all">
+                </div>
+            </div>
+
             <div>
                 <label for="active_gateway" class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Active Payment Gateway</label>
                 <select name="active_gateway" id="active_gateway" required

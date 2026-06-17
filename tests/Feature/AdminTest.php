@@ -385,4 +385,94 @@ class AdminTest extends TestCase
         $this->assertEquals('10.00', Setting::getValue('daily_attendance_bonus_amount'));
         $this->assertEquals('15.0', Setting::getValue('referral_commission_percentage'));
     }
+
+    public function test_user_can_save_payout_details_once()
+    {
+        $user = User::create(['mobile' => '9876543210', 'name' => 'John']);
+
+        // Mock Razorpay IFSC API call
+        \Illuminate\Support\Facades\Http::fake([
+            'https://ifsc.razorpay.com/SBIN0001234' => \Illuminate\Support\Facades\Http::response([
+                'BANK' => 'State Bank of India',
+                'IFSC' => 'SBIN0001234'
+            ], 200)
+        ]);
+
+        // 1. Save details first time
+        $response = $this->actingAs($user, 'sanctum')
+            ->postJson('/api/v1/profile/payout-details', [
+                'account_number' => '1234567890',
+                'ifsc_code' => 'SBIN0001234',
+                'account_holder_name' => 'John Doe',
+                'upi_id' => 'john@upi'
+            ]);
+
+        $response->assertStatus(200)
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.user.upi_id', 'john@upi');
+
+        // 2. Try to save again with different details
+        $response = $this->actingAs($user, 'sanctum')
+            ->postJson('/api/v1/profile/payout-details', [
+                'upi_id' => 'other@upi'
+            ]);
+
+        $response->assertStatus(422)
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('message', 'UPI ID is already added. Contact support to update it.');
+    }
+
+    public function test_config_endpoint_returns_custom_gateway_names()
+    {
+        Setting::setValue('gateway_upi_qr_name', 'My Custom Paytm');
+        Setting::setValue('gateway_manual_qr_name', 'My Custom Manual');
+
+        $response = $this->getJson('/api/v1/config');
+
+        $response->assertStatus(200)
+            ->assertJsonPath('data.gateway_upi_qr_name', 'My Custom Paytm')
+            ->assertJsonPath('data.gateway_manual_qr_name', 'My Custom Manual');
+    }
+
+    public function test_invalid_ifsc_code_returns_error()
+    {
+        $user = User::create(['mobile' => '9876543210', 'name' => 'John']);
+
+        // Mock Razorpay IFSC API call returning 404
+        \Illuminate\Support\Facades\Http::fake([
+            'https://ifsc.razorpay.com/SBIN0000000' => \Illuminate\Support\Facades\Http::response('Not Found', 404)
+        ]);
+
+        $response = $this->actingAs($user, 'sanctum')
+            ->postJson('/api/v1/profile/payout-details', [
+                'account_number' => '1234567890',
+                'ifsc_code' => 'SBIN0000000',
+                'account_holder_name' => 'John Doe'
+            ]);
+
+        $response->assertStatus(422)
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('message', 'Invalid IFSC Code. Please check and try again.');
+    }
+
+    public function test_ifsc_not_found_body_returns_error()
+    {
+        $user = User::create(['mobile' => '9876543210', 'name' => 'John']);
+
+        // Mock Razorpay IFSC API call returning 200 but body is "Not Found"
+        \Illuminate\Support\Facades\Http::fake([
+            'https://ifsc.razorpay.com/SBIN0000001' => \Illuminate\Support\Facades\Http::response('Not Found', 200)
+        ]);
+
+        $response = $this->actingAs($user, 'sanctum')
+            ->postJson('/api/v1/profile/payout-details', [
+                'account_number' => '1234567890',
+                'ifsc_code' => 'SBIN0000001',
+                'account_holder_name' => 'John Doe'
+            ]);
+
+        $response->assertStatus(422)
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('message', 'Invalid IFSC Code. Please check and try again.');
+    }
 }

@@ -226,4 +226,78 @@ class DashboardTest extends TestCase
             ->assertJsonPath('success', false)
             ->assertJsonPath('message', 'Welcome bonus is automatically credited on registration.');
     }
+
+    /**
+     * Test GET /api/v1/statistics.
+     */
+    public function test_statistics_endpoint_returns_correct_data(): void
+    {
+        // Set setting values
+        \App\Models\Setting::setValue('usdt_rate', '110');
+        \App\Models\Setting::setValue('commission_percentage', '4.2');
+        \App\Models\Setting::setValue('selling_status', 'open');
+
+        // Create standard plan
+        $plan = \App\Models\Plan::create([
+            'name' => 'Basic Plan',
+            'amount' => 1000.00,
+            'daily_commission' => 20.00,
+            'duration_days' => 30,
+            'category' => 'standard',
+            'status' => 'active'
+        ]);
+
+        // Create some orders
+        // 1. Pending order
+        \App\Models\Order::create([
+            'id' => 'ORD1',
+            'user_id' => $this->user->id,
+            'plan_id' => $plan->id,
+            'amount' => 500.00,
+            'status' => 'pending',
+            'payment_method' => 'upi',
+            'commission_earned' => 0.00,
+        ]);
+
+        // 2. Active order with a plan
+        \App\Models\Order::create([
+            'id' => 'ORD2',
+            'user_id' => $this->user->id,
+            'plan_id' => $plan->id,
+            'amount' => 1000.00,
+            'status' => 'active',
+            'payment_method' => 'upi',
+            'commission_earned' => 0.00,
+        ]);
+
+        // Update user balances
+        $this->user->update([
+            'wallet_balance' => 39.53,
+            'total_withdrawn' => 0.00,
+            'total_investment' => 1000.00,
+            'total_commission' => 0.00,
+        ]);
+
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->getJson('/api/v1/statistics');
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+                'message' => 'Statistics fetched successfully.',
+                'data' => [
+                    'balance' => '39.53',
+                    'sell' => '0.00',
+                    'deposit' => '1000.00',
+                    'commission' => '0.00',
+                    'usdt_rate' => 110.0,
+                    'in_process_amount' => '500.00',
+                    'in_process_orders' => 1,
+                    'commission_rate' => '4.20',
+                    'estimated_income' => '600.00', // 20.00 * 30
+                    'selling_status' => 'open',
+                    'date' => now()->format('d/m/Y'),
+                ]
+            ]);
+    }
 }

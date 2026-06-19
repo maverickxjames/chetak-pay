@@ -572,6 +572,8 @@ class AdminDashboardController extends Controller
             'daily_attendance_bonus_amount' => Setting::getValue('daily_attendance_bonus_amount', '5.00'),
             'referral_commission_percentage' => Setting::getValue('referral_commission_percentage', '10.0'),
             'firebase_service_account_json' => Setting::getValue('firebase_service_account_json', ''),
+            'usdt_rate' => Setting::getValue('usdt_rate', '109'),
+            'selling_status' => Setting::getValue('selling_status', 'closed'),
         ];
 
         return view('admin.settings', compact('settings'));
@@ -615,6 +617,8 @@ class AdminDashboardController extends Controller
             'daily_attendance_bonus_amount' => 'required|numeric|min:0',
             'referral_commission_percentage' => 'required|numeric|min:0|max:100',
             'firebase_service_account_json' => 'nullable|string',
+            'usdt_rate' => 'nullable|numeric|min:1',
+            'selling_status' => 'nullable|in:open,closed',
         ]);
 
         $keys = [
@@ -647,6 +651,8 @@ class AdminDashboardController extends Controller
             'daily_attendance_bonus_amount',
             'referral_commission_percentage',
             'firebase_service_account_json',
+            'usdt_rate',
+            'selling_status',
         ];
 
         foreach ($keys as $key) {

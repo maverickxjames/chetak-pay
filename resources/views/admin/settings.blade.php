@@ -163,6 +163,29 @@
 
             <hr class="border-white/10">
 
+            <!-- USDT & Selling Settings -->
+            <div class="space-y-4">
+                <h4 class="text-sm font-bold text-[#FFC107]">USDT Exchange & Selling Settings</h4>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label for="usdt_rate" class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">USDT Exchange Rate (INR/USDT)</label>
+                        <input type="number" step="1" min="1" name="usdt_rate" id="usdt_rate" required value="{{ $settings['usdt_rate'] ?? '109' }}" placeholder="109"
+                               class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#FFC107] focus:ring-1 focus:ring-[#FFC107] transition-all">
+                    </div>
+                    <div>
+                        <label for="selling_status" class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Selling Status (Statistics Screen Button)</label>
+                        <select name="selling_status" id="selling_status" required
+                                class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#FFC107] focus:ring-1 focus:ring-[#FFC107] transition-all"
+                                style="background-color: #1a082e;">
+                            <option value="open" {{ ($settings['selling_status'] ?? 'closed') === 'open' ? 'selected' : '' }}>Open Selling</option>
+                            <option value="closed" {{ ($settings['selling_status'] ?? 'closed') === 'closed' ? 'selected' : '' }}>Closed Selling</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <hr class="border-white/10">
+
             <!-- OTP SMS Gateway Configurations -->
             <div class="space-y-6">
                 <div class="flex items-center justify-between">

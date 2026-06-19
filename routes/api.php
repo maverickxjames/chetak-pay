@@ -31,6 +31,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/rewards', [RewardController::class, 'index']);
         Route::post('/rewards/{id}/claim', [RewardController::class, 'claim']);
         Route::get('/wallet', [WalletController::class, 'index']);
+        Route::get('/statistics', [WalletController::class, 'getStatistics']);
         Route::get('/team', [TeamController::class, 'index']);
         Route::get('/notifications', [NotificationController::class, 'index']);
 
